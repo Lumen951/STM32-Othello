@@ -1,0 +1,23 @@
+# STM32 Othello PC Client Requirements
+# STM32黑白棋PC上位机依赖包
+
+# GUI Framework
+# tkinter is built-in with Python
+
+# Serial Communication
+pyserial>=3.5
+
+# HTTP Requests for DeepSeek API
+requests>=2.28.0
+
+# Optional: Enhanced GUI components
+# Pillow>=9.0.0  # For image processing if needed
+
+# Development and Testing (optional)
+# pytest>=7.0.0
+# pytest-cov>=4.0.0
+# black>=22.0.0
+# flake8>=5.0.0
+
+# Packaging (optional)
+# pyinstaller>=5.0.0
