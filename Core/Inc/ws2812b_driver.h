@@ -76,6 +76,7 @@ typedef enum {
 #define WS2812B_COLOR_YELLOW    ((RGB_Color_t){255, 255, 0})
 #define WS2812B_COLOR_MAGENTA   ((RGB_Color_t){255, 0, 255})
 #define WS2812B_COLOR_CYAN      ((RGB_Color_t){0, 255, 255})
+#define WS2812B_COLOR_ORANGE    ((RGB_Color_t){255, 102, 0})    // Braun Orange for Black pieces
 /**
  * @}
  */
@@ -87,10 +88,12 @@ typedef enum {
  * @param row Row index (0-7)
  * @param col Column index (0-7)
  * @retval Linear LED index (0-63)
- * @note Uses serpentine (zigzag) mapping for typical LED matrix wiring
+ * @note Simple linear mapping - hardware confirmed as standard linear wiring
+ *       Physical layout: LED[0]=top-left, LED[7]=top-right, LED[56]=bottom-left, LED[63]=bottom-right
+ *       Logical mapping: (0,0)=top-left, (0,7)=top-right, (7,0)=bottom-left, (7,7)=bottom-right
+ *       All rows wired left-to-right, no serpentine pattern
  */
-#define WS2812B_GET_LED_INDEX(row, col) \
-    (((row) % 2 == 0) ? ((row) * WS2812B_LED_COLS + (col)) : ((row) * WS2812B_LED_COLS + (WS2812B_LED_COLS - 1 - (col))))
+#define WS2812B_GET_LED_INDEX(row, col) ((row) * WS2812B_LED_COLS + (col))
 
 /**
  * @brief Check if coordinates are valid
@@ -186,6 +189,13 @@ void WS2812B_DMA_Complete_Callback(DMA_HandleTypeDef *hdma);
  * @note For debugging and verification purposes
  */
 WS2812B_Status_t WS2812B_Test_RGB_Pattern(void);
+
+/**
+ * @brief Simple LED test - Light up first LED only
+ * @retval WS2812B_Status_t Status of operation
+ * @note Lights up LED at position (0,0) in RED for hardware testing
+ */
+WS2812B_Status_t WS2812B_Test_Simple(void);
 
 #ifdef __cplusplus
 }

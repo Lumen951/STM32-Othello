@@ -99,7 +99,7 @@ static const char KEYPAD_CHAR_MAP[] = {
  * @brief Key name strings for debugging
  */
 #ifdef DEBUG
-static const char* KEYPAD_KEY_NAMES[] = {
+__attribute__((unused)) static const char* KEYPAD_KEY_NAMES[] = {
     "KEY_1", "KEY_2", "KEY_3", "KEY_A",
     "KEY_4", "KEY_5", "KEY_6", "KEY_B",
     "KEY_7", "KEY_8", "KEY_9", "KEY_C",

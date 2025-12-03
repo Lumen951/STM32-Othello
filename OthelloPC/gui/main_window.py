@@ -97,6 +97,9 @@ class MainWindow:
         )
         self.status_label.pack(side='left', padx=(10, 0))
 
+        # === 状态显示面板（棋盘格样式）===
+        self._create_status_grid(left_frame)
+
         # 游戏棋盘
         self.game_board = GameBoard(
             left_frame,
@@ -122,6 +125,120 @@ class MainWindow:
 
         # 初始更新界面
         self._update_ui_state()
+
+    def _create_status_grid(self, parent):
+        """创建棋盘格样式的状态展示面板"""
+        # 状态面板容器
+        status_container = tk.Frame(parent, bg=DieterStyle.COLORS['board_bg'],
+                                   relief='solid', bd=2)
+        status_container.pack(fill='x', pady=(10, 5))
+
+        # 创建2x2网格布局
+        # 行0: 当前回合 | 连接状态
+        # 行1: 棋子计数 | 按键提示
+
+        # === 第一行 ===
+        row1_frame = tk.Frame(status_container, bg=DieterStyle.COLORS['board_bg'])
+        row1_frame.pack(fill='x', padx=5, pady=5)
+
+        # 当前回合（左侧）
+        turn_cell = tk.Frame(row1_frame, bg='white', relief='ridge', bd=2)
+        turn_cell.pack(side='left', fill='both', expand=True, padx=(0, 5))
+
+        tk.Label(turn_cell, text="当前回合",
+                font=('Arial', 10, 'bold'),
+                bg='white', fg=DieterStyle.COLORS['gray_dark']).pack(pady=(5, 2))
+
+        self.turn_display = tk.Label(turn_cell, text="黑方（橙色）",
+                                     font=('Arial', 14, 'bold'),
+                                     bg='white', fg=DieterStyle.COLORS['braun_orange'])
+        self.turn_display.pack(pady=(2, 5))
+
+        # STM32连接状态（右侧）
+        conn_cell = tk.Frame(row1_frame, bg='white', relief='ridge', bd=2)
+        conn_cell.pack(side='right', fill='both', expand=True, padx=(5, 0))
+
+        tk.Label(conn_cell, text="STM32状态",
+                font=('Arial', 10, 'bold'),
+                bg='white', fg=DieterStyle.COLORS['gray_dark']).pack(pady=(5, 2))
+
+        self.conn_display = tk.Label(conn_cell, text="● 未连接",
+                                     font=('Arial', 12, 'normal'),
+                                     bg='white', fg=DieterStyle.COLORS['error_red'])
+        self.conn_display.pack(pady=(2, 5))
+
+        # === 第二行 ===
+        row2_frame = tk.Frame(status_container, bg=DieterStyle.COLORS['board_bg'])
+        row2_frame.pack(fill='x', padx=5, pady=(0, 5))
+
+        # 棋子计数（左侧）
+        score_cell = tk.Frame(row2_frame, bg='white', relief='ridge', bd=2)
+        score_cell.pack(side='left', fill='both', expand=True, padx=(0, 5))
+
+        tk.Label(score_cell, text="棋子统计",
+                font=('Arial', 10, 'bold'),
+                bg='white', fg=DieterStyle.COLORS['gray_dark']).pack(pady=(5, 2))
+
+        self.score_display = tk.Label(score_cell,
+                                      text="橙: 2  vs  白: 2",
+                                      font=('Arial', 12, 'bold'),
+                                      bg='white', fg=DieterStyle.COLORS['black'])
+        self.score_display.pack(pady=(2, 5))
+
+        # 按键提示（右侧）
+        key_cell = tk.Frame(row2_frame, bg='white', relief='ridge', bd=2)
+        key_cell.pack(side='right', fill='both', expand=True, padx=(5, 0))
+
+        tk.Label(key_cell, text="⌨️ 下位机按键",
+                font=('Arial', 10, 'bold'),
+                bg='white', fg=DieterStyle.COLORS['gray_dark']).pack(pady=(5, 2))
+
+        key_guide = tk.Label(key_cell,
+                            text="2↑ 4← 5● 6→ 8↓\n1=新游戏 0=重置 9=发送",
+                            font=('Consolas', 9, 'normal'),
+                            bg='white', fg=DieterStyle.COLORS['data_blue'],
+                            justify='center')
+        key_guide.pack(pady=(2, 5))
+
+    def _update_status_display(self):
+        """更新状态显示面板"""
+        try:
+            game_state = self.game_manager.current_game
+
+            # 更新当前回合
+            if game_state.current_player.value == 1:  # BLACK
+                self.turn_display.config(
+                    text="黑方（橙色）▶",
+                    fg=DieterStyle.COLORS['braun_orange']
+                )
+            else:  # WHITE
+                self.turn_display.config(
+                    text="白方 ▶",
+                    fg=DieterStyle.COLORS['black']
+                )
+
+            # 更新棋子计数
+            self.score_display.config(
+                text=f"橙: {game_state.black_count}  vs  白: {game_state.white_count}"
+            )
+
+            # 游戏状态特殊显示
+            if game_state.status.value != 0:  # Not PLAYING
+                winner = ""
+                if game_state.status.value == 1:  # BLACK_WIN
+                    winner = "🏆 黑方（橙色）获胜！"
+                    color = DieterStyle.COLORS['braun_orange']
+                elif game_state.status.value == 2:  # WHITE_WIN
+                    winner = "🏆 白方获胜！"
+                    color = DieterStyle.COLORS['black']
+                else:  # DRAW
+                    winner = "🤝 平局！"
+                    color = DieterStyle.COLORS['gray_dark']
+
+                self.turn_display.config(text=winner, fg=color)
+
+        except Exception as e:
+            self.logger.error(f"更新状态显示失败: {e}")
 
     def _create_menu(self):
         """创建菜单栏"""
@@ -498,6 +615,9 @@ class MainWindow:
             if self.game_board:
                 self.game_board.update_board()
 
+            # 更新状态显示面板
+            self._update_status_display()
+
             # 检查游戏结束
             if event == 'game_ended':
                 self._on_game_ended()
@@ -511,7 +631,7 @@ class MainWindow:
 
         # 确定胜负
         if game_state.status.value == 1:  # BLACK_WIN
-            winner = f"黑方获胜 ({game_state.black_count}-{game_state.white_count})"
+            winner = f"黑方（橙色）获胜 ({game_state.black_count}-{game_state.white_count})"
         elif game_state.status.value == 2:  # WHITE_WIN
             winner = f"白方获胜 ({game_state.white_count}-{game_state.black_count})"
         else:  # DRAW
@@ -520,7 +640,7 @@ class MainWindow:
         # 显示游戏结果
         result = messagebox.askyesno(
             "游戏结束",
-            f"{winner}\\n\\n是否使用DeepSeek分析这局游戏？"
+            f"{winner}\n\n是否使用DeepSeek AI分析这局游戏？"
         )
 
         if result:
@@ -534,12 +654,22 @@ class MainWindow:
                 fg=DieterStyle.COLORS['success_green']
             )
             self.connect_btn.config(text="断开连接")
+            # 更新状态面板中的连接状态
+            self.conn_display.config(
+                text="● 已连接",
+                fg=DieterStyle.COLORS['success_green']
+            )
         else:
             self.status_label.config(
                 text="未连接",
                 fg=DieterStyle.COLORS['error_red']
             )
             self.connect_btn.config(text="连接STM32")
+            # 更新状态面板中的连接状态
+            self.conn_display.config(
+                text="● 未连接",
+                fg=DieterStyle.COLORS['error_red']
+            )
 
     def update_game_board(self):
         """更新游戏棋盘显示"""

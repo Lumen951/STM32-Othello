@@ -14,6 +14,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "ws2812b_driver.h"
+#include "debug_print.h"
 #include <string.h>
 
 /* Private typedef -----------------------------------------------------------*/
@@ -93,10 +94,9 @@ WS2812B_Status_t WS2812B_Init(void)
     ws2812b_state.is_busy = 0;
     ws2812b_state.initialized = 1;
 
-    /* Start PWM but don't start DMA yet */
-    if (HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1) != HAL_OK) {
-        return WS2812B_ERROR;
-    }
+    /* PWM will be started together with DMA in WS2812B_Update() */
+    /* Don't start PWM here to avoid HAL_TIM_PWM_Start_DMA() failure */
+    /* This allows proper coordination between PWM and DMA lifecycle */
 
     return WS2812B_OK;
 }
@@ -178,9 +178,12 @@ WS2812B_Status_t WS2812B_Update(void)
     /* Set busy flag */
     ws2812b_state.is_busy = 1;
 
+    DEBUG_INFO("[LED] DMA Start, size=%d\r\n", WS2812B_BUFFER_SIZE);
+
     /* Start DMA transfer */
     if (HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, (uint32_t*)pwm_buffer, WS2812B_BUFFER_SIZE) != HAL_OK) {
         ws2812b_state.is_busy = 0;
+        DEBUG_ERROR("[LED] DMA Start FAILED\r\n");
         return WS2812B_ERROR;
     }
 
@@ -241,8 +244,10 @@ WS2812B_Status_t WS2812B_Fill(RGB_Color_t color)
  */
 void WS2812B_DMA_Complete_Callback(DMA_HandleTypeDef *hdma)
 {
-    /* Check if this is our DMA channel */
-    if (hdma->Instance == DMA1_Channel1) {
+    /* Check if this is our DMA channel - DMA1_Channel5 for TIM2_CH1 */
+    if (hdma->Instance == DMA1_Channel5) {
+        DEBUG_INFO("[LED] DMA Complete\r\n");
+
         /* Stop PWM DMA */
         HAL_TIM_PWM_Stop_DMA(&htim2, TIM_CHANNEL_1);
 
@@ -287,6 +292,28 @@ WS2812B_Status_t WS2812B_Test_RGB_Pattern(void)
         }
     }
 
+    return WS2812B_Update();
+}
+
+/**
+ * @brief Simple LED test - Light up first LED only
+ */
+WS2812B_Status_t WS2812B_Test_Simple(void)
+{
+    /* Check initialization */
+    if (!ws2812b_state.initialized) {
+        return WS2812B_ERROR;
+    }
+
+    DEBUG_INFO("[LED] Test Simple: Lighting up first LED (0,0) in RED\r\n");
+
+    /* Clear all LEDs */
+    WS2812B_Clear();
+
+    /* Light up only the first LED in bright RED */
+    WS2812B_SetPixel(0, 0, WS2812B_COLOR_RED);
+
+    /* Update display */
     return WS2812B_Update();
 }
 

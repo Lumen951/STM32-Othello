@@ -25,7 +25,7 @@ Core/Src/keypad_driver.o: ../Core/Src/keypad_driver.c \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h \
- ../Core/Inc/keypad_mapping.h
+ ../Core/Inc/keypad_mapping.h ../Core/Inc/debug_print.h
 ../Core/Inc/keypad_driver.h:
 ../Core/Inc/main.h:
 ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal.h:
@@ -54,3 +54,4 @@ Core/Src/keypad_driver.o: ../Core/Src/keypad_driver.c \
 ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h:
 ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h:
 ../Core/Inc/keypad_mapping.h:
+../Core/Inc/debug_print.h:

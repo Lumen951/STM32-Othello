@@ -27,6 +27,7 @@
 #include "keypad_mapping.h"
 #include "uart_protocol.h"
 #include "othello_engine.h"
+#include "debug_print.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -55,6 +56,12 @@ UART_HandleTypeDef huart1;
 static GameState_t game_state;
 static GameStats_t game_stats;
 static bool game_initialized = false;
+
+/* Cursor control variables */
+static uint8_t cursor_row = 3;          // Cursor row position (initial: board center)
+static uint8_t cursor_col = 3;          // Cursor column position (initial: board center)
+static bool cursor_visible = true;      // Cursor visibility (for blinking)
+static uint32_t cursor_blink_timer = 0; // Cursor blink timer
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -66,6 +73,8 @@ static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 static void Convert_GameState_to_Protocol(const GameState_t* game_state, Game_State_Data_t* protocol_state);
 static Protocol_Status_t Send_GameState_Via_Protocol(const GameState_t* game_state);
+void App_UpdateCursor(void);
+void App_PrintGameHistory(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -141,41 +150,70 @@ int main(void)
   MX_TIM2_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  /* IMPORTANT: Debug output must be AFTER USART1 initialization */
+  HAL_Delay(100);  // Small delay to allow UART to stabilize
+
+  DEBUG_PRINT_BANNER();
+  DEBUG_INFO("[INIT] HAL Initialized\r\n");
+  DEBUG_INFO("[INIT] System Clock Configured\r\n");
+  DEBUG_INFO("[INIT] GPIO Initialized\r\n");
+  DEBUG_INFO("[INIT] DMA Initialized\r\n");
+  DEBUG_INFO("[INIT] TIM2 Initialized\r\n");
+  DEBUG_INFO("[INIT] USART1 Initialized\r\n");
+
   /* Enable DWT counter for microsecond delays */
   CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
   DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
   /* Initialize WS2812B driver */
   if (WS2812B_Init() != WS2812B_OK) {
+    DEBUG_ERROR("[INIT] WS2812B Driver...FAILED\r\n");
     Error_Handler(); /* WS2812B initialization failed */
   }
+  DEBUG_INFO("[INIT] WS2812B Driver...OK\r\n");
 
   /* Initialize Keypad driver */
-  if (Keypad_Init() != KEYPAD_OK) {
+  Keypad_Status_t keypad_status = Keypad_Init();
+  if (keypad_status != KEYPAD_OK) {
+    DEBUG_ERROR("[INIT] Keypad Driver...FAILED (status=%d)\r\n", keypad_status);
     Error_Handler(); /* Keypad initialization failed */
   }
+  DEBUG_INFO("[INIT] Keypad Driver...OK\r\n");
 
+  /* Test keypad quick check */
+  bool any_key = Keypad_Quick_Check();
+  DEBUG_INFO("[INIT] Keypad Quick Check: %s\r\n", any_key ? "Keys detected" : "No keys");
+
+  /* TEMPORARILY DISABLED: UART Protocol conflicts with Debug output */
   /* Initialize UART Protocol */
+  /*
   if (Protocol_Init() != PROTOCOL_OK) {
-    Error_Handler(); /* Protocol initialization failed */
+    DEBUG_ERROR("[INIT] UART Protocol...FAILED\r\n");
+    Error_Handler();
   }
+  DEBUG_INFO("[INIT] UART Protocol...OK\r\n");
+  */
+  DEBUG_INFO("[INIT] UART Protocol...SKIPPED (Debug mode)\r\n");
 
   /* Register keypad event callback */
   Keypad_Register_Callback(Keypad_Key_Event_Handler);
 
+  /* TEMPORARILY DISABLED: Protocol callback */
   /* Register protocol command callback */
-  Protocol_RegisterCallback(Protocol_Command_Handler);
+  // Protocol_RegisterCallback(Protocol_Command_Handler);
 
   /* Initialize game engine */
   if (Othello_Init() != OTHELLO_OK) {
+    DEBUG_ERROR("[INIT] Othello Engine...FAILED\r\n");
     Error_Handler(); /* Game engine initialization failed */
   }
+  DEBUG_INFO("[INIT] Othello Engine...OK\r\n");
 
   /* Application-specific initialization */
   App_Init();
+  DEBUG_INFO("[INIT] Application...OK\r\n");
 
-  /* Optional: Display startup pattern */
-  WS2812B_Test_RGB_Pattern();
+  DEBUG_INFO("[BOOT] System Ready!\r\n");
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -191,8 +229,11 @@ int main(void)
     /* Keypad scanning (if not using interrupt-driven mode) */
     Keypad_Scan_Task();
 
-    /* Protocol maintenance tasks */
-    Protocol_Task();
+    /* Update cursor blinking */
+    App_UpdateCursor();
+
+    /* Protocol maintenance tasks - DISABLED for debug */
+    // Protocol_Task();
 
     /* Small delay to prevent excessive CPU usage */
     HAL_Delay(1);
@@ -454,11 +495,37 @@ void App_Main_Loop(void)
 }
 
 /**
+ * @brief Update cursor display with blinking effect
+ * @retval None
+ */
+void App_UpdateCursor(void)
+{
+  if (!game_initialized) {
+    return;
+  }
+
+  uint32_t current_time = HAL_GetTick();
+
+  // Toggle cursor visibility every 500ms
+  if (current_time - cursor_blink_timer >= 500) {
+    cursor_blink_timer = current_time;
+    cursor_visible = !cursor_visible;
+
+    // Redraw board to update cursor
+    App_DisplayGameBoard();
+  }
+}
+
+/**
  * @brief Display game board on LED matrix
  * @retval None
  */
 void App_DisplayGameBoard(void)
 {
+  if (!game_initialized) {
+    return;
+  }
+
   WS2812B_Clear();
 
   /* Display game pieces on LED matrix */
@@ -467,12 +534,22 @@ void App_DisplayGameBoard(void)
       PieceType_t piece = Othello_GetPiece(&game_state, row, col);
 
       if (piece == PIECE_BLACK) {
-        WS2812B_SetPixel(row, col, WS2812B_COLOR_BLACK);  // Black piece
+        WS2812B_SetPixel(row, col, WS2812B_COLOR_ORANGE);  // Black piece (Orange for visibility)
       } else if (piece == PIECE_WHITE) {
         WS2812B_SetPixel(row, col, WS2812B_COLOR_WHITE);  // White piece
       }
       /* Empty positions remain off */
     }
+  }
+
+  /* Display cursor (green blinking) */
+  if (cursor_visible) {
+    PieceType_t cursor_piece = Othello_GetPiece(&game_state, cursor_row, cursor_col);
+    if (cursor_piece == PIECE_EMPTY) {
+      // Empty position: show green cursor
+      WS2812B_SetPixel(cursor_row, cursor_col, WS2812B_COLOR_GREEN);
+    }
+    // If there's a piece at cursor position, don't show cursor (or could use dimmed green)
   }
 
   WS2812B_Update();
@@ -491,56 +568,195 @@ void App_ProcessKeyEvent(Key_t* key_event)
 
   Keypad_LogicalKey_t logical_key = Keypad_PhysicalToLogical(key_event->row, key_event->col);
 
+  DEBUG_INFO("[APP] ProcessKey: R%d C%d Logical=%d State=%d\r\n",
+             key_event->row, key_event->col, logical_key, key_event->state);
+
   /* Handle key press */
   if (key_event->state == KEY_PRESSED) {
     switch (logical_key) {
-      case KEYPAD_KEY_1: // New game
+      // === Core Function Keys ===
+
+      case KEYPAD_KEY_1: // New Game
+        DEBUG_INFO("[APP] New Game\r\n");
         if (Othello_UpdateStats(&game_stats, &game_state) == OTHELLO_OK) {
           Othello_NewGame(&game_state);
+          cursor_row = 3;  // Reset cursor to center
+          cursor_col = 3;
+          cursor_visible = true;
           App_DisplayGameBoard();
         }
         break;
 
-      case KEYPAD_KEY_5: // Select/Move at current cursor
-        {
-          /* Simple demo: Place piece at (key_event.row, key_event.col) if valid */
-          if (Othello_IsValidMove(&game_state, key_event->row, key_event->col, game_state.current_player)) {
-            uint8_t flipped = Othello_MakeMove(&game_state, key_event->row, key_event->col, game_state.current_player);
-            if (flipped > 0) {
-              /* Move successful */
-              App_DisplayGameBoard();
-              Send_GameState_Via_Protocol(&game_state);  // Send update to PC
-            }
-          } else {
-            /* Invalid move - show red flash */
-            if (key_event->row < 8 && key_event->col < 8) {
-              WS2812B_SetPixel(key_event->row, key_event->col, WS2812B_COLOR_RED);
-              WS2812B_Update();
-              HAL_Delay(200);
-              App_DisplayGameBoard();
-            }
-          }
+      case KEYPAD_KEY_2: // Move Up
+        if (cursor_row > 0) {
+          cursor_row--;
+          DEBUG_INFO("[APP] Cursor UP: (%d,%d)\r\n", cursor_row, cursor_col);
+          cursor_visible = true;  // Show cursor immediately when moving
+          cursor_blink_timer = HAL_GetTick();  // Reset blink timer
+          App_DisplayGameBoard();
+        } else {
+          DEBUG_INFO("[APP] Cursor at top edge\r\n");
         }
         break;
 
-      case KEYPAD_KEY_0: // Reset game
+      case KEYPAD_KEY_4: // Move Left
+        if (cursor_col > 0) {
+          cursor_col--;
+          DEBUG_INFO("[APP] Cursor LEFT: (%d,%d)\r\n", cursor_row, cursor_col);
+          cursor_visible = true;
+          cursor_blink_timer = HAL_GetTick();
+          App_DisplayGameBoard();
+        } else {
+          DEBUG_INFO("[APP] Cursor at left edge\r\n");
+        }
+        break;
+
+      case KEYPAD_KEY_5: // Place Piece at Cursor
+        DEBUG_INFO("[APP] Place piece at cursor (%d,%d)\r\n", cursor_row, cursor_col);
+        if (Othello_IsValidMove(&game_state, cursor_row, cursor_col, game_state.current_player)) {
+          uint8_t flipped = Othello_MakeMove(&game_state, cursor_row, cursor_col, game_state.current_player);
+          if (flipped > 0) {
+            DEBUG_INFO("[APP] Move SUCCESS: flipped %d pieces\r\n", flipped);
+            App_DisplayGameBoard();
+            Send_GameState_Via_Protocol(&game_state);
+
+            // Check if game is over
+            if (game_state.status != GAME_STATUS_PLAYING) {
+              DEBUG_INFO("[APP] Game Over! Winner: %d\r\n",
+                        Othello_GetWinner(&game_state));
+              // Print game history to debug console
+              App_PrintGameHistory();
+              // PC will show AI analysis dialog
+            }
+          }
+        } else {
+          DEBUG_INFO("[APP] Invalid move at (%d,%d)\r\n", cursor_row, cursor_col);
+          // Invalid move - red flash
+          WS2812B_SetPixel(cursor_row, cursor_col, WS2812B_COLOR_RED);
+          WS2812B_Update();
+          HAL_Delay(200);
+          App_DisplayGameBoard();
+        }
+        break;
+
+      case KEYPAD_KEY_6: // Move Right
+        if (cursor_col < 7) {
+          cursor_col++;
+          DEBUG_INFO("[APP] Cursor RIGHT: (%d,%d)\r\n", cursor_row, cursor_col);
+          cursor_visible = true;
+          cursor_blink_timer = HAL_GetTick();
+          App_DisplayGameBoard();
+        } else {
+          DEBUG_INFO("[APP] Cursor at right edge\r\n");
+        }
+        break;
+
+      case KEYPAD_KEY_8: // Move Down
+        if (cursor_row < 7) {
+          cursor_row++;
+          DEBUG_INFO("[APP] Cursor DOWN: (%d,%d)\r\n", cursor_row, cursor_col);
+          cursor_visible = true;
+          cursor_blink_timer = HAL_GetTick();
+          App_DisplayGameBoard();
+        } else {
+          DEBUG_INFO("[APP] Cursor at bottom edge\r\n");
+        }
+        break;
+
+      case KEYPAD_KEY_0: // Reset Game
+        DEBUG_INFO("[APP] Reset Game\r\n");
         Othello_NewGame(&game_state);
+        cursor_row = 3;
+        cursor_col = 3;
+        cursor_visible = true;
         App_DisplayGameBoard();
         break;
 
-      case KEYPAD_KEY_9: // Send board state to PC
+      case KEYPAD_KEY_9: // Send Board State to PC
+        DEBUG_INFO("[APP] Send board state to PC\r\n");
         Send_GameState_Via_Protocol(&game_state);
         break;
 
+      // === Reserved Function Keys ===
+
+      case KEYPAD_KEY_3:
+        DEBUG_INFO("[APP] Key 3 - Reserved\r\n");
+        break;
+
+      case KEYPAD_KEY_7:
+        DEBUG_INFO("[APP] Key 7 - Reserved\r\n");
+        break;
+
+      case KEYPAD_KEY_STAR:
+        DEBUG_INFO("[APP] Key * - Reserved (Menu)\r\n");
+        break;
+
+      case KEYPAD_KEY_HASH:
+        DEBUG_INFO("[APP] Key # - Reserved (Confirm)\r\n");
+        break;
+
+      case KEYPAD_KEY_A:
+        DEBUG_INFO("[APP] Key A - Reserved\r\n");
+        break;
+
+      case KEYPAD_KEY_B:
+        DEBUG_INFO("[APP] Key B - Reserved\r\n");
+        break;
+
+      case KEYPAD_KEY_C:
+        DEBUG_INFO("[APP] Key C - Reserved\r\n");
+        break;
+
+      case KEYPAD_KEY_D:
+        DEBUG_INFO("[APP] Key D - Reserved\r\n");
+        break;
+
       default:
-        /* For demo: Show pressed key position on board */
-        if (key_event->row < 8 && key_event->col < 8) {
-          WS2812B_SetPixel(key_event->row, key_event->col, WS2812B_COLOR_GREEN);
-          WS2812B_Update();
-        }
+        DEBUG_INFO("[APP] Unknown key: %d\r\n", logical_key);
         break;
     }
   }
+}
+
+/**
+ * @brief Print game history to debug console
+ * @retval None
+ * @note Since full move history is not stored, we print summary statistics
+ */
+void App_PrintGameHistory(void)
+{
+  if (!game_initialized) {
+    return;
+  }
+
+  DEBUG_INFO("\r\n========== Game History ==========\r\n");
+  DEBUG_INFO("Total moves: %lu\r\n", game_state.move_count);
+  DEBUG_INFO("Black count: %d, White count: %d\r\n",
+             game_state.black_count, game_state.white_count);
+  DEBUG_INFO("Game status: %d\r\n", game_state.status);
+
+  if (game_state.move_count > 0) {
+    DEBUG_INFO("\r\nLast move:\r\n");
+    DEBUG_INFO("  Player: %d, Position: (%d,%d), Flipped: %d\r\n",
+               game_state.last_move.player,
+               game_state.last_move.row,
+               game_state.last_move.col,
+               game_state.last_move.flipped_count);
+  }
+
+  if (game_state.status != GAME_STATUS_PLAYING) {
+    PieceType_t winner = Othello_GetWinner(&game_state);
+    DEBUG_INFO("\r\nGame Result:\r\n");
+    if (winner == PIECE_BLACK) {
+      DEBUG_INFO("  Winner: BLACK (Orange)\r\n");
+    } else if (winner == PIECE_WHITE) {
+      DEBUG_INFO("  Winner: WHITE\r\n");
+    } else {
+      DEBUG_INFO("  Result: DRAW\r\n");
+    }
+  }
+
+  DEBUG_INFO("==================================\r\n\r\n");
 }
 
 /**
@@ -626,8 +842,11 @@ void Keypad_Key_Event_Handler(uint8_t row, uint8_t col, KeyState_t state)
   /* Get logical key for more meaningful processing */
   Keypad_LogicalKey_t logical_key = Keypad_PhysicalToLogical(row, col);
 
-  /* Send key event over UART protocol */
-  Protocol_SendKeyEvent(row, col, (uint8_t)state, (uint8_t)logical_key);
+  /* Debug log */
+  DEBUG_INFO("[APP] KeyEvent: R%d C%d State=%d Logical=%d\r\n", row, col, state, logical_key);
+
+  /* Send key event over UART protocol - DISABLED for debug */
+  // Protocol_SendKeyEvent(row, col, (uint8_t)state, (uint8_t)logical_key);
 
   /* Demo: Simple LED feedback for key press */
   if (state == KEY_PRESSED) {
@@ -753,6 +972,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
   /* Call protocol RX callback */
   Protocol_UART_RxCallback(huart);
 }
+
 /* USER CODE END 4 */
 
 /**

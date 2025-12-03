@@ -33,7 +33,7 @@ class DieterStyle:
         # 棋盘专用色
         'board_bg': '#F8F8F8',      # 棋盘背景
         'board_grid': '#E0E0E0',    # 棋盘网格线
-        'piece_black': '#000000',   # 黑子
+        'piece_black': '#FF6600',   # 黑子 (博朗橙色，与下位机一致)
         'piece_white': '#FFFFFF',   # 白子
         'piece_border': '#333333',  # 棋子边框
 

@@ -1,3 +1,4 @@
+"./Core/Src/debug_print.o"
 "./Core/Src/keypad_driver.o"
 "./Core/Src/main.o"
 "./Core/Src/othello_engine.o"

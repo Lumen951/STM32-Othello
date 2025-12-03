@@ -52,7 +52,6 @@ typedef struct {
     KeyState_t prev_state;      ///< Previous key state
     uint32_t press_timestamp;   ///< Press start timestamp
     uint32_t debounce_timer;    ///< Debounce timer
-    uint8_t stable_count;       ///< Stable detection counter
 } Key_t;
 
 /**
@@ -68,9 +67,8 @@ typedef void (*Keypad_Callback_t)(uint8_t row, uint8_t col, KeyState_t state);
 #define KEYPAD_ROWS                 4       ///< Number of keypad rows
 #define KEYPAD_COLS                 4       ///< Number of keypad columns
 #define KEYPAD_TOTAL_KEYS           16      ///< Total number of keys
-#define KEYPAD_DEBOUNCE_TIME_MS     20      ///< Debounce time in milliseconds
+#define KEYPAD_DEBOUNCE_TIME_MS     10      ///< Debounce time in milliseconds
 #define KEYPAD_LONG_PRESS_TIME_MS   1000    ///< Long press threshold in milliseconds
-#define KEYPAD_STABLE_COUNT         3       ///< Required stable readings for valid key press
 #define KEYPAD_SCAN_INTERVAL_MS     5       ///< Scan interval in milliseconds (200Hz)
 /**
  * @}

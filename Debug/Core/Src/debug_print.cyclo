@@ -1,0 +1,5 @@
+../Core/Src/debug_print.c:25:6:Debug_Init	1
+../Core/Src/debug_print.c:34:6:Debug_Printf	4
+../Core/Src/debug_print.c:67:6:Debug_Print_Raw	3
+../Core/Src/debug_print.c:93:6:Debug_Print_Hex	5
+../Core/Src/debug_print.c:124:6:Debug_Print_Banner	1

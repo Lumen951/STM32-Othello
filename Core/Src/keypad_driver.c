@@ -16,6 +16,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "keypad_driver.h"
 #include "keypad_mapping.h"
+#include "debug_print.h"
 #include <string.h>
 
 /* Private typedef -----------------------------------------------------------*/
@@ -414,6 +415,7 @@ static GPIO_PinState Keypad_ReadColumn(uint8_t col)
 
 /**
  * @brief Process debouncing for a key
+ * @note Press: wait 10ms for stability, Release: immediate response
  */
 static bool Keypad_ProcessDebounce(Key_t* key, bool current_pressed)
 {
@@ -423,52 +425,31 @@ static bool Keypad_ProcessDebounce(Key_t* key, bool current_pressed)
     if (current_pressed) {
         // Key is currently pressed
         if (key->state == KEY_RELEASED) {
-            // Transition from released to potentially pressed
-            key->debounce_timer = current_time;
-            key->stable_count = 1;
-        } else {
-            // Key was already pressed or in debounce
-            key->stable_count++;
-
-            if (key->stable_count >= KEYPAD_STABLE_COUNT &&
-                (current_time - key->debounce_timer) >= keypad_driver.debounce_time_ms) {
-                // Stable press detected
-                if (key->state == KEY_RELEASED) {
-                    key->prev_state = key->state;
-                    key->state = KEY_PRESSED;
-                    key->press_timestamp = current_time;
-                    state_changed = true;
-                }
+            // Transition from released to pressed
+            if (key->debounce_timer == 0) {
+                // First detection of press, start timer
+                key->debounce_timer = current_time;
+            } else if (current_time - key->debounce_timer >= 10) {
+                // Stable press for 10ms, confirm as valid key press
+                key->prev_state = KEY_RELEASED;
+                key->state = KEY_PRESSED;
+                key->press_timestamp = current_time;
+                state_changed = true;
             }
+            // else: still within 10ms, continue waiting
         }
+        // else: key->state is already PRESSED, no processing needed
     } else {
         // Key is currently released
         if (key->state != KEY_RELEASED) {
-            // Transition from pressed to released
-            key->debounce_timer = current_time;
-            key->stable_count = 1;
-        } else {
-            // Key was already released or in debounce
-            if (key->debounce_timer != 0) {
-                key->stable_count++;
-
-                if (key->stable_count >= KEYPAD_STABLE_COUNT &&
-                    (current_time - key->debounce_timer) >= keypad_driver.debounce_time_ms) {
-                    // Stable release confirmed
-                    key->debounce_timer = 0;
-                }
-            }
-        }
-
-        // If debounce timer expired and key was pressed, mark as released
-        if (key->state != KEY_RELEASED && key->debounce_timer != 0 &&
-            (current_time - key->debounce_timer) >= keypad_driver.debounce_time_ms &&
-            key->stable_count >= KEYPAD_STABLE_COUNT) {
-
+            // Transition from pressed to released, immediate confirm
             key->prev_state = key->state;
             key->state = KEY_RELEASED;
             key->debounce_timer = 0;
             state_changed = true;
+        } else {
+            // Continuously not pressed, reset timer
+            key->debounce_timer = 0;
         }
     }
 
@@ -503,7 +484,6 @@ static void Keypad_ResetKey(Key_t* key, uint8_t row, uint8_t col)
     key->prev_state = KEY_RELEASED;
     key->press_timestamp = 0;
     key->debounce_timer = 0;
-    key->stable_count = 0;
 }
 
 /**
