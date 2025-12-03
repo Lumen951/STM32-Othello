@@ -21,16 +21,38 @@ from game.game_state import GameState, Move, PieceType, GameStatus
 class DeepSeekClient:
     """DeepSeek AI分析客户端"""
 
-    def __init__(self, api_key: str = None, base_url: str = "https://api.deepseek.com"):
+    def __init__(self, api_key: str = None, base_url: str = "https://api.deepseek.com", config=None):
         """
         初始化DeepSeek客户端
 
         Args:
-            api_key: DeepSeek API密钥
-            base_url: API基础URL
+            api_key: DeepSeek API密钥 (优先使用此参数,如果为None则从config读取)
+            base_url: API基础URL (优先使用此参数,如果为默认值则从config读取)
+            config: Config配置对象 (可选,用于读取所有DeepSeek配置)
         """
-        self.api_key = api_key
-        self.base_url = base_url
+        # 优先使用传入的参数,其次使用config对象的配置
+        if config:
+            self.api_key = api_key if api_key is not None else config.deepseek_api_key
+            self.base_url = base_url if base_url != "https://api.deepseek.com" else config.deepseek_base_url
+
+            # 分析参数配置 (从config读取)
+            self.analysis_config = {
+                'model': config.deepseek_model,
+                'temperature': config.deepseek_temperature,
+                'max_tokens': config.deepseek_max_tokens
+            }
+        else:
+            # 没有config对象时使用传入的参数或默认值
+            self.api_key = api_key
+            self.base_url = base_url
+
+            # 分析参数配置 (使用默认值)
+            self.analysis_config = {
+                'model': 'deepseek-chat',
+                'temperature': 0.1,
+                'max_tokens': 2000
+            }
+
         self.session = requests.Session()
         self.logger = logging.getLogger(__name__)
 
@@ -40,13 +62,6 @@ class DeepSeekClient:
                 'Authorization': f'Bearer {self.api_key}',
                 'Content-Type': 'application/json'
             })
-
-        # 分析参数配置
-        self.analysis_config = {
-            'model': 'deepseek-chat',
-            'temperature': 0.1,
-            'max_tokens': 2000
-        }
 
     def set_api_key(self, api_key: str):
         """设置API密钥"""

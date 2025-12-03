@@ -13,6 +13,7 @@ import json
 import os
 from typing import Any, Dict
 import logging
+from dotenv import load_dotenv
 
 class Config:
     """配置管理器"""
@@ -27,6 +28,10 @@ class Config:
         self.config_file = config_file
         self.config_data: Dict[str, Any] = {}
         self.logger = logging.getLogger(__name__)
+
+        # 加载.env文件(如果存在)
+        load_dotenv()
+        self.logger.info("已尝试加载.env环境变量")
 
         # 默认配置
         self.default_config = {
@@ -196,19 +201,50 @@ class Config:
 
     @property
     def deepseek_api_key(self) -> str:
+        """获取DeepSeek API密钥 (优先从环境变量)"""
+        # 优先从环境变量读取(安全)
+        env_key = os.getenv('DEEPSEEK_API_KEY')
+        if env_key:
+            return env_key
+        # 降级到config.json
         return self.get('deepseek.api_key', '')
 
     @deepseek_api_key.setter
     def deepseek_api_key(self, value: str):
+        """设置DeepSeek API密钥 (保存到config.json,不修改.env)"""
         self.set('deepseek.api_key', value)
 
     @property
-    def deepseek_base_url(self) -> str:
-        return self.get('deepseek.base_url', 'https://api.deepseek.com')
+    def deepseek_model(self) -> str:
+        """获取DeepSeek模型名称"""
+        return os.getenv('DEEPSEEK_MODEL') or self.get('deepseek.model', 'deepseek-chat')
 
-    @deepseek_base_url.setter
-    def deepseek_base_url(self, value: str):
-        self.set('deepseek.base_url', value)
+    @property
+    def deepseek_base_url(self) -> str:
+        """获取DeepSeek API基础URL"""
+        return os.getenv('DEEPSEEK_BASE_URL') or self.get('deepseek.base_url', 'https://api.deepseek.com')
+
+    @property
+    def deepseek_temperature(self) -> float:
+        """获取DeepSeek温度参数"""
+        env_temp = os.getenv('DEEPSEEK_TEMPERATURE')
+        if env_temp:
+            try:
+                return float(env_temp)
+            except ValueError:
+                pass
+        return self.get('deepseek.temperature', 0.1)
+
+    @property
+    def deepseek_max_tokens(self) -> int:
+        """获取DeepSeek最大Token数"""
+        env_tokens = os.getenv('DEEPSEEK_MAX_TOKENS')
+        if env_tokens:
+            try:
+                return int(env_tokens)
+            except ValueError:
+                pass
+        return self.get('deepseek.max_tokens', 2000)
 
     @property
     def ui_window_width(self) -> int:

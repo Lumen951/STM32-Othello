@@ -41,16 +41,16 @@ class MainWindow:
         self.game_manager = game_manager
         self.config = config
 
-        # DeepSeek客户端
-        self.deepseek_client = None
-        self._setup_deepseek_client()
+        # 日志 (必须在其他初始化之前)
+        self.logger = logging.getLogger(__name__)
 
         # UI组件
         self.game_board: Optional[GameBoard] = None
         self.history_panel: Optional[HistoryPanel] = None
 
-        # 日志
-        self.logger = logging.getLogger(__name__)
+        # DeepSeek客户端
+        self.deepseek_client = None
+        self._setup_deepseek_client()
 
         # 应用主题
         AppTheme.apply_to_window(self.root)
@@ -161,14 +161,11 @@ class MainWindow:
     def _setup_deepseek_client(self):
         """设置DeepSeek客户端"""
         try:
-            # 从配置中获取API密钥
-            api_key = None
-            if self.config:
-                api_key = getattr(self.config, 'deepseek_api_key', None)
+            # 使用config对象初始化DeepSeek客户端
+            # config对象会自动从.env和config.json读取所有DeepSeek配置
+            self.deepseek_client = DeepSeekClient(config=self.config)
 
-            self.deepseek_client = DeepSeekClient(api_key=api_key)
-
-            if api_key:
+            if self.config and self.config.deepseek_api_key:
                 self.logger.info("DeepSeek客户端初始化完成")
             else:
                 self.logger.warning("未设置DeepSeek API密钥")
@@ -250,7 +247,7 @@ class MainWindow:
         # 创建设置对话框
         settings_window = tk.Toplevel(self.root)
         settings_window.title("DeepSeek API 设置")
-        settings_window.geometry("400x200")
+        settings_window.geometry("500x350")
         settings_window.resizable(False, False)
         settings_window.transient(self.root)
         settings_window.grab_set()
@@ -263,7 +260,21 @@ class MainWindow:
         main_frame.pack(fill='both', expand=True, padx=20, pady=20)
 
         title_label = DieterWidgets.create_label(main_frame, "DeepSeek API 配置", 'heading')
-        title_label.pack(pady=(10, 20))
+        title_label.pack(pady=(10, 10))
+
+        # 安全警告
+        warning_frame = tk.Frame(main_frame, bg='#FFF9E6', relief='solid', borderwidth=1)
+        warning_frame.pack(fill='x', pady=(0, 15))
+
+        warning_text = DieterWidgets.create_label(
+            warning_frame,
+            "安全提示: 推荐在.env文件中配置API密钥\n"
+            "(.env文件不会被Git提交)\n"
+            "在此处设置将保存到config.json (会被Git提交)",
+            'small'
+        )
+        warning_text.config(fg='#8B6914', justify='left', wraplength=430)
+        warning_text.pack(padx=10, pady=10)
 
         # API密钥输入
         key_label = DieterWidgets.create_label(main_frame, "API 密钥:", 'body')
@@ -281,6 +292,24 @@ class MainWindow:
             show='*'
         )
         key_entry.pack(fill='x', pady=(0, 10))
+
+        # 当前配置来源
+        config_source = "未设置"
+        if self.config:
+            if self.config.deepseek_api_key:
+                import os
+                env_key = os.getenv('DEEPSEEK_API_KEY')
+                if env_key:
+                    config_source = ".env 文件"
+                else:
+                    config_source = "config.json 文件"
+
+        source_label = DieterWidgets.create_label(
+            main_frame,
+            f"当前密钥来源: {config_source}",
+            'small'
+        )
+        source_label.pack(anchor='w', pady=(0, 10))
 
         # 按钮区域
         button_frame = tk.Frame(main_frame, bg=DieterStyle.COLORS['panel_bg'])

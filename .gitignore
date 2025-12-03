@@ -1,2 +1,26 @@
 
-.claude
+.claude/
+
+# 环境变量文件(包含敏感信息)
+OthelloPC/.env
+.env
+
+# 配置文件(可能包含敏感信息)
+OthelloPC/config.json
+config.json
+
+# Python缓存
+OthelloPC/__pycache__/
+OthelloPC/analysis/__pycache__/
+OthelloPC/communication/__pycache__/
+OthelloPC/gui/__pycache__/
+OthelloPC/utils/__pycache__/
+OthelloPC/game/__pycache__/
+__pycache__/
+*.pyc
+*.pyo
+
+# 日志文件
+OthelloPC/logs/
+logs/
+*.log
