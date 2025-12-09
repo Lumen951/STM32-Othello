@@ -299,8 +299,8 @@ class HistoryPanel(tk.Frame):
         """更新按钮状态"""
         game_state = self.game_manager.current_game
 
-        # 分析按钮 - 只有在游戏结束后才能分析
-        if game_state.status != GameStatus.PLAYING and game_state.status != GameStatus.NOT_STARTED and game_state.move_count > 0:
+        # 分析按钮 - 只要有走法记录就能分析（允许游戏进行中分析）
+        if game_state.move_count > 0:
             self.analyze_btn.config(state='normal')
         else:
             self.analyze_btn.config(state='disabled')

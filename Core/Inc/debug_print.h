@@ -14,8 +14,10 @@
 #define __DEBUG_PRINT_H
 
 /* Enable debug output globally - set to 0 to disable */
+/* DISABLED: USART1 is used for Protocol communication with PC */
+/* To re-enable debug: change to ENABLE_DEBUG 1 and disable Protocol */
 #ifndef ENABLE_DEBUG
-#define ENABLE_DEBUG 1
+#define ENABLE_DEBUG 0
 #endif
 
 #ifdef __cplusplus

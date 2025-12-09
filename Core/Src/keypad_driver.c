@@ -193,7 +193,7 @@ void Keypad_Scan(void)
  */
 Key_t Keypad_GetKey(void)
 {
-    Key_t empty_key = {0, 0, KEY_RELEASED, KEY_RELEASED, 0, 0, 0};
+    Key_t empty_key = {0, 0, KEY_RELEASED, KEY_RELEASED, 0, 0};  /* 6 fields: row, col, state, prev_state, press_timestamp, debounce_timer */
 
     if (!keypad_driver.initialized || keypad_driver.queue_count == 0) {
         return empty_key;

@@ -40,6 +40,10 @@ class OthelloPC:
         self.root = None
         self.running = False
 
+        # Connection verification flags
+        self._connection_verified = False
+        self._last_heartbeat_time = 0
+
     def initialize(self):
         """初始化所有组件"""
         try:
@@ -71,6 +75,9 @@ class OthelloPC:
                 config=self.config
             )
 
+            # 传递连接验证标志检查函数给主窗口
+            self.main_window._connection_verified_flag = lambda: self._connection_verified
+
             # 设置退出处理
             self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
@@ -86,24 +93,71 @@ class OthelloPC:
     def on_serial_data_received(self, command, data):
         """处理从STM32接收到的数据"""
         try:
-            if command == 0x01:  # CMD_BOARD_STATE
+            from communication.serial_handler import SerialProtocol
+
+            if command == SerialProtocol.CMD_BOARD_STATE:  # 0x01
+                # 棋盘状态同步
                 self.game_manager.update_board_state(data)
                 if self.main_window:
                     self.main_window.update_game_board()
-            elif command == 0x0A:  # CMD_KEY_EVENT
+                self.logger.info("收到棋盘状态同步")
+
+            elif command == SerialProtocol.CMD_ACK:  # 0x08
+                # 确认响应
+                if len(data) >= 2:
+                    original_cmd = data[0]
+                    status = data[1]
+                    if status == 0:
+                        self.logger.info(f"命令 0x{original_cmd:02X} 执行成功")
+                    else:
+                        self.logger.warning(f"命令 0x{original_cmd:02X} 执行失败，状态码: {status}")
+                else:
+                    self.logger.warning("收到格式错误的ACK响应")
+
+            elif command == SerialProtocol.CMD_ERROR:  # 0xFF
+                # 错误响应
+                if len(data) >= 1:
+                    error_code = data[0]
+                    self.logger.error(f"STM32错误: 错误码 {error_code}")
+                    if self.main_window:
+                        # 在主线程中显示错误提示
+                        self.root.after(0, lambda: messagebox.showwarning(
+                            "STM32错误",
+                            f"设备返回错误码: {error_code}\n可能是命令不支持或参数错误"
+                        ))
+
+            elif command == SerialProtocol.CMD_KEY_EVENT:  # 0x0A
+                # 按键事件
                 if self.main_window:
                     self.main_window.handle_key_event(data)
-            elif command == 0x05:  # CMD_SYSTEM_INFO
+                self.logger.debug(f"收到按键事件，数据长度: {len(data)}")
+
+            elif command == SerialProtocol.CMD_SYSTEM_INFO:  # 0x05
+                # 系统信息
                 if self.main_window:
                     self.main_window.update_system_info(data)
-            elif command == 0x07:  # CMD_HEARTBEAT
+                # 标记连接已验证
+                self._connection_verified = True
+                self.logger.info("收到系统信息，连接验证成功")
+
+            elif command == SerialProtocol.CMD_HEARTBEAT:  # 0x07
+                # 心跳响应
+                self._last_heartbeat_time = time.time()
                 if self.main_window:
                     self.main_window.update_connection_status(True)
+                self.logger.debug("收到心跳响应")
+
+            elif command == SerialProtocol.CMD_GAME_CONFIG:  # 0x03
+                # 游戏配置响应（新游戏确认）
+                self.logger.info("收到新游戏确认")
+
             else:
-                self.logger.debug(f"收到未知命令: 0x{command:02X}")
+                self.logger.debug(f"收到未知命令: 0x{command:02X}, 数据长度: {len(data)}")
 
         except Exception as e:
             self.logger.error(f"处理串口数据失败: {e}")
+            import traceback
+            traceback.print_exc()
 
     def on_closing(self):
         """应用程序关闭处理"""

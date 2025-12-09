@@ -334,12 +334,14 @@ class SerialHandler:
 
     def _receive_worker(self):
         """接收数据工作线程"""
+        self.logger.info("串口接收线程已启动")
         while self.running:
             try:
                 if self.serial_port and self.serial_port.is_open:
                     # 读取数据
                     if self.serial_port.in_waiting > 0:
                         data = self.serial_port.read(self.serial_port.in_waiting)
+                        self.logger.debug(f"接收到原始数据 ({len(data)}字节): {data.hex(' ')}")
                         self.receive_buffer.extend(data)
 
                         # 解析数据包
@@ -353,6 +355,8 @@ class SerialHandler:
                 self.logger.error(f"接收数据错误: {e}")
                 self.stats['errors'] += 1
                 time.sleep(0.1)
+
+        self.logger.info("串口接收线程已停止")
 
     def _send_worker(self):
         """发送数据工作线程"""
@@ -381,11 +385,13 @@ class SerialHandler:
             header_index = self.receive_buffer.find(SerialProtocol.PACKET_HEADER)
             if header_index == -1:
                 # 没有找到包头，清空缓冲区
+                self.logger.warning(f"未找到包头，丢弃 {len(self.receive_buffer)} 字节数据")
                 self.receive_buffer.clear()
                 break
 
             # 移除包头之前的数据
             if header_index > 0:
+                self.logger.warning(f"包头前有 {header_index} 字节垃圾数据，已丢弃")
                 self.receive_buffer = self.receive_buffer[header_index:]
 
             # 检查是否有完整的包
@@ -396,11 +402,14 @@ class SerialHandler:
             packet_len = 5 + data_len
 
             if len(self.receive_buffer) < packet_len:
+                self.logger.debug(f"数据包不完整，等待更多数据 (当前:{len(self.receive_buffer)}, 需要:{packet_len})")
                 break  # 数据不完整，等待更多数据
 
             # 提取数据包
             packet_data = bytes(self.receive_buffer[:packet_len])
             self.receive_buffer = self.receive_buffer[packet_len:]
+
+            self.logger.debug(f"提取数据包 ({packet_len}字节): {packet_data.hex(' ')}")
 
             # 解析数据包
             result = SerialProtocol.parse_packet(packet_data)
@@ -408,16 +417,22 @@ class SerialHandler:
                 command, data = result
                 self.stats['packets_received'] += 1
 
+                self.logger.info(f"✅ 解析成功 - 命令: 0x{command:02X}, 数据长度: {len(data)}, 数据: {data.hex(' ') if len(data) <= 16 else data[:16].hex(' ') + '...'}")
+
                 # 调用回调函数
                 if self.callback:
                     try:
+                        self.logger.debug(f"调用回调函数，命令: 0x{command:02X}")
                         self.callback(command, data)
                     except Exception as e:
                         self.logger.error(f"回调函数执行错误: {e}")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    self.logger.warning("⚠️ 回调函数未设置，数据包被忽略")
 
-                self.logger.debug(f"接收到命令: 0x{command:02X}, 数据长度: {len(data)}")
             else:
-                self.logger.warning("接收到无效数据包")
+                self.logger.warning(f"❌ 数据包校验失败: {packet_data.hex(' ')}")
                 self.stats['errors'] += 1
 
     def get_connection_info(self) -> Dict:

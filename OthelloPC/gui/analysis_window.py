@@ -17,6 +17,7 @@ from typing import Dict, Optional
 
 from gui.styles import DieterStyle, DieterWidgets
 from analysis.deepseek_client import DeepSeekClient
+from analysis.pdf_generator import PDFReportGenerator
 from game.game_state import GameState
 
 class AnalysisReportWindow:
@@ -116,9 +117,37 @@ class AnalysisReportWindow:
         content_frame = DieterWidgets.create_panel(self.window, 'main')
         content_frame.pack(fill='both', expand=True, padx=10, pady=(0, 10))
 
-        # 创建标签页
+        # 创建加载动画容器（初始隐藏）
+        self.loading_frame = tk.Frame(content_frame, bg=DieterStyle.COLORS['white'])
+        self.loading_frame.pack(fill='both', expand=True, padx=10, pady=10)
+
+        # 加载动画标签
+        self.loading_label = tk.Label(
+            self.loading_frame,
+            text="⏳ 正在连接DeepSeek AI...",
+            font=('Arial', 14, 'bold'),
+            bg=DieterStyle.COLORS['white'],
+            fg=DieterStyle.COLORS['data_blue']
+        )
+        self.loading_label.pack(expand=True)
+
+        # 加载提示文本
+        self.loading_hint = tk.Label(
+            self.loading_frame,
+            text="请稍候，AI正在分析您的棋局",
+            font=('Arial', 10),
+            bg=DieterStyle.COLORS['white'],
+            fg=DieterStyle.COLORS['gray_dark']
+        )
+        self.loading_hint.pack(expand=True, pady=(10, 0))
+
+        # 动画计数器
+        self.loading_dots = 0
+        self.animation_running = False
+
+        # 创建标签页（初始隐藏）
         self.notebook = ttk.Notebook(content_frame)
-        self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
+        # 不立即pack，等分析完成后再显示
 
         # 分析报告标签页
         self.analysis_frame = tk.Frame(self.notebook, bg=DieterStyle.COLORS['white'])
@@ -172,6 +201,11 @@ class AnalysisReportWindow:
         self._update_pgn_display()
         self._update_tech_display()
 
+        # 显示窗口并置顶
+        self.window.deiconify()
+        self.window.lift()
+        self.window.focus_force()
+
     def _generate_game_info_text(self) -> str:
         """生成游戏信息文本"""
         status_map = {
@@ -196,8 +230,26 @@ class AnalysisReportWindow:
 
     def start_analysis(self):
         """开始分析"""
+        # 启动加载动画
+        self.animation_running = True
+        self._animate_loading()
+
         self.analysis_thread = threading.Thread(target=self._perform_analysis, daemon=True)
         self.analysis_thread.start()
+
+    def _animate_loading(self):
+        """加载动画效果"""
+        if not self.animation_running:
+            return
+
+        # 更新动画文本
+        dots = "." * (self.loading_dots % 4)
+        spaces = " " * (3 - (self.loading_dots % 4))
+        self.loading_label.config(text=f"⏳ 正在分析中{dots}{spaces}")
+        self.loading_dots += 1
+
+        # 继续动画
+        self.window.after(500, self._animate_loading)
 
     def _perform_analysis(self):
         """执行分析（在后台线程中）"""
@@ -224,6 +276,13 @@ class AnalysisReportWindow:
     def _on_analysis_complete(self, result: Dict):
         """分析完成回调"""
         self.analysis_result = result
+
+        # 停止加载动画
+        self.animation_running = False
+
+        # 隐藏加载动画，显示结果标签页
+        self.loading_frame.pack_forget()
+        self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
 
         if result['success']:
             # 显示分析结果
@@ -380,8 +439,83 @@ AI分析: DeepSeek API
 
     def _export_pdf(self):
         """导出PDF报告"""
-        # 这里可以集成PDF生成库，暂时显示提示
-        messagebox.showinfo("功能开发中", "PDF导出功能正在开发中，请使用保存报告功能。")
+        if not self.analysis_result or not self.analysis_result['success']:
+            messagebox.showwarning("导出失败", "没有可导出的分析结果")
+            return
+
+        try:
+            # 选择保存路径
+            filename = filedialog.asksaveasfilename(
+                title="导出PDF报告",
+                defaultextension=".pdf",
+                filetypes=[
+                    ("PDF文件", "*.pdf"),
+                    ("所有文件", "*.*")
+                ]
+            )
+
+            if filename:
+                # 显示进度提示
+                self.status_label.config(
+                    text="正在生成PDF...",
+                    fg=DieterStyle.COLORS['data_blue']
+                )
+                self.export_btn.config(state='disabled')
+                self.window.update()
+
+                # 创建PDF生成器
+                pdf_gen = PDFReportGenerator(filename)
+
+                # 添加报告头部
+                pdf_gen.add_header(
+                    "DeepSeek AI 游戏分析报告",
+                    "STM32 Othello Project"
+                )
+
+                # 添加游戏信息
+                pdf_gen.add_game_info(self.game_state)
+
+                # 添加棋盘图示
+                pdf_gen.add_board_diagram(self.game_state)
+
+                # 添加分析文本
+                pdf_gen.add_analysis_text(self.analysis_result['analysis'])
+
+                # 添加棋谱记录
+                pdf_gen.add_pgn_moves(self.game_state.moves_history)
+
+                # 生成PDF
+                if pdf_gen.generate():
+                    self.status_label.config(
+                        text="PDF导出成功",
+                        fg=DieterStyle.COLORS['success_green']
+                    )
+                    messagebox.showinfo("导出成功", f"PDF报告已保存到:\n{filename}")
+                else:
+                    self.status_label.config(
+                        text="PDF生成失败",
+                        fg=DieterStyle.COLORS['error_red']
+                    )
+                    messagebox.showerror("导出失败", "PDF生成失败，请查看日志")
+
+                # 恢复按钮状态
+                self.export_btn.config(state='normal')
+
+        except ImportError as e:
+            messagebox.showerror(
+                "依赖缺失",
+                f"PDF导出功能需要安装reportlab库\n\n"
+                f"请运行以下命令安装:\n"
+                f"pip install reportlab\n\n"
+                f"错误详情: {e}"
+            )
+        except Exception as e:
+            self.status_label.config(
+                text="导出失败",
+                fg=DieterStyle.COLORS['error_red']
+            )
+            messagebox.showerror("导出失败", f"导出PDF时发生错误:\n{e}")
+            self.export_btn.config(state='normal')
 
     def _refresh_analysis(self):
         """刷新分析"""
@@ -390,11 +524,12 @@ AI分析: DeepSeek API
         self.save_btn.config(state='disabled')
         self.export_btn.config(state='disabled')
 
-        # 清空分析内容
-        self.analysis_text.config(state='normal')
-        self.analysis_text.delete(1.0, tk.END)
-        self.analysis_text.insert(tk.END, "正在重新分析...")
-        self.analysis_text.config(state='disabled')
+        # 隐藏结果标签页，显示加载动画
+        self.notebook.pack_forget()
+        self.loading_frame.pack(fill='both', expand=True, padx=10, pady=10)
+
+        # 重置动画计数器
+        self.loading_dots = 0
 
         # 开始新的分析
         self.start_analysis()
@@ -407,9 +542,3 @@ AI分析: DeepSeek API
             pass
 
         self.window.destroy()
-
-    def show(self):
-        """显示窗口"""
-        self.window.transient(self.parent)
-        self.window.grab_set()
-        self.parent.wait_window(self.window)

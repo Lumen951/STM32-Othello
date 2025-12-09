@@ -48,6 +48,10 @@ class MainWindow:
         self.game_board: Optional[GameBoard] = None
         self.history_panel: Optional[HistoryPanel] = None
 
+        # Connection verification
+        self._connection_verified = False
+        self._connection_timeout_count = 0
+
         # DeepSeek客户端
         self.deepseek_client = None
         self._setup_deepseek_client()
@@ -325,23 +329,77 @@ class MainWindow:
             ports = self.serial_handler.get_available_ports()
 
             if not ports:
-                messagebox.showwarning("连接失败", "未找到可用的串口设备")
+                messagebox.showwarning("连接失败", "未找到可用的串口设备\n请检查：\n1. USB-TTL模块是否连接\n2. 驱动是否已安装")
                 return
 
-            # 尝试连接
-            success = self.serial_handler.connect()
+            # 优先尝试连接COM7，如果失败则尝试其他端口
+            port_to_use = 'COM7'
+            if self.config and hasattr(self.config, 'serial_port'):
+                port_to_use = self.config.serial_port
+
+            success = self.serial_handler.connect(port=port_to_use)
 
             if success:
-                self.logger.info("STM32连接成功")
-                messagebox.showinfo("连接成功", f"已成功连接到STM32设备")
+                self.logger.info(f"串口 {port_to_use} 已打开，正在验证连接...")
+
+                # 发送系统信息请求验证连接
+                self.serial_handler.send_system_info_request()
+
+                # 等待响应（使用定时器检查，避免阻塞UI）
+                self._connection_timeout_count = 0
+                self._verify_connection_timer()
             else:
-                messagebox.showerror("连接失败", "无法连接到STM32设备，请检查设备连接")
+                messagebox.showerror("连接失败",
+                    f"无法打开 {port_to_use} 端口\n\n请检查：\n"
+                    f"1. 设备是否连接\n"
+                    f"2. 端口是否被占用\n"
+                    f"3. 驱动是否正常\n"
+                    f"4. 是否有权限访问串口\n\n"
+                    f"可用端口列表：\n" + "\n".join([f"  {p['device']}: {p['description']}" for p in ports]))
 
         except Exception as e:
             self.logger.error(f"STM32连接失败: {e}")
-            messagebox.showerror("连接错误", f"连接STM32时发生错误:\\n{e}")
+            messagebox.showerror("连接错误", f"连接STM32时发生错误:\n{e}")
 
         self._update_ui_state()
+
+    def _verify_connection_timer(self):
+        """验证连接的定时器（非阻塞）"""
+        # 检查是否收到系统信息响应
+        # 该标志在 OthelloPC.on_serial_data_received 中设置
+        app = self.root.nametowidget(".")  # 获取主应用实例的引用
+
+        # 通过共享变量检查连接状态（从main.py传递）
+        if hasattr(self, '_connection_verified_flag'):
+            if self._connection_verified_flag():
+                self.logger.info("STM32连接验证成功")
+                port_info = self.serial_handler.port_name or "未知端口"
+                messagebox.showinfo("连接成功",
+                    f"已成功连接到STM32设备\n\n"
+                    f"端口: {port_info}\n"
+                    f"波特率: 115200\n"
+                    f"状态: 通信正常")
+                return
+
+        # 超时检查（3秒，检查6次，每次500ms）
+        self._connection_timeout_count += 1
+        if self._connection_timeout_count > 6:
+            self.logger.warning("STM32连接验证超时")
+            messagebox.showwarning("连接警告",
+                "已打开串口，但未收到STM32响应\n\n"
+                "可能的原因：\n"
+                "1. STM32未正常运行或未上电\n"
+                "2. 固件未更新或Protocol未启用\n"
+                "3. 波特率不匹配（应为115200）\n"
+                "4. 接线错误（TX-RX交叉连接）\n\n"
+                "建议：\n"
+                "• 检查STM32是否运行（观察LED）\n"
+                "• 重新烧录固件\n"
+                "• 使用串口助手测试硬件连接")
+            return
+
+        # 继续等待，500ms后再次检查
+        self.root.after(500, self._verify_connection_timer)
 
     def _disconnect_stm32(self):
         """断开STM32连接"""
@@ -485,17 +543,17 @@ class MainWindow:
                     self._deepseek_settings()
                 return
 
-            # 创建分析报告窗口
+            # 创建分析报告窗口（窗口会自动显示，无需调用show()）
             analysis_window = AnalysisReportWindow(
                 self.root,
                 self.game_manager.current_game,
                 self.deepseek_client
             )
-            analysis_window.show()
+            # 注意：窗口在__init__中已经显示并置顶，无需额外调用
 
         except Exception as e:
             self.logger.error(f"请求分析失败: {e}")
-            messagebox.showerror("分析错误", f"请求分析时发生错误:\\n{e}")
+            messagebox.showerror("分析错误", f"请求分析时发生错误:\n{e}")
 
     def _save_game(self):
         """保存游戏"""

@@ -180,27 +180,36 @@ int main(void)
   }
   DEBUG_INFO("[INIT] Keypad Driver...OK\r\n");
 
-  /* Test keypad quick check */
+  /* Test keypad quick check (disabled when DEBUG is off) */
+  #if ENABLE_DEBUG
   bool any_key = Keypad_Quick_Check();
   DEBUG_INFO("[INIT] Keypad Quick Check: %s\r\n", any_key ? "Keys detected" : "No keys");
+  #else
+  (void)Keypad_Quick_Check();  /* Run check but ignore result when debug disabled */
+  #endif
 
-  /* TEMPORARILY DISABLED: UART Protocol conflicts with Debug output */
-  /* Initialize UART Protocol */
-  /*
+  /* Initialize UART Protocol (USART1 for PC communication) */
   if (Protocol_Init() != PROTOCOL_OK) {
-    DEBUG_ERROR("[INIT] UART Protocol...FAILED\r\n");
+    /* Protocol initialization failed - indicate with LED */
+    /* Flash all LEDs red as error indicator */
+    for (uint8_t i = 0; i < 8; i++) {
+      for (uint8_t j = 0; j < 8; j++) {
+        WS2812B_SetPixel(i, j, WS2812B_COLOR_RED);
+      }
+    }
+    WS2812B_Update();
     Error_Handler();
   }
-  DEBUG_INFO("[INIT] UART Protocol...OK\r\n");
-  */
-  DEBUG_INFO("[INIT] UART Protocol...SKIPPED (Debug mode)\r\n");
+
+  /* Protocol initialized successfully - send initial heartbeat */
+  HAL_Delay(100);  /* Wait for UART to stabilize */
+  Protocol_SendHeartbeat();
 
   /* Register keypad event callback */
   Keypad_Register_Callback(Keypad_Key_Event_Handler);
 
-  /* TEMPORARILY DISABLED: Protocol callback */
   /* Register protocol command callback */
-  // Protocol_RegisterCallback(Protocol_Command_Handler);
+  Protocol_RegisterCallback(Protocol_Command_Handler);
 
   /* Initialize game engine */
   if (Othello_Init() != OTHELLO_OK) {
@@ -232,8 +241,8 @@ int main(void)
     /* Update cursor blinking */
     App_UpdateCursor();
 
-    /* Protocol maintenance tasks - DISABLED for debug */
-    // Protocol_Task();
+    /* Protocol maintenance tasks (heartbeat & timeout handling) */
+    Protocol_Task();
 
     /* Small delay to prevent excessive CPU usage */
     HAL_Delay(1);
@@ -845,8 +854,8 @@ void Keypad_Key_Event_Handler(uint8_t row, uint8_t col, KeyState_t state)
   /* Debug log */
   DEBUG_INFO("[APP] KeyEvent: R%d C%d State=%d Logical=%d\r\n", row, col, state, logical_key);
 
-  /* Send key event over UART protocol - DISABLED for debug */
-  // Protocol_SendKeyEvent(row, col, (uint8_t)state, (uint8_t)logical_key);
+  /* Send key event over UART protocol */
+  Protocol_SendKeyEvent(row, col, (uint8_t)state, (uint8_t)logical_key);
 
   /* Demo: Simple LED feedback for key press */
   if (state == KEY_PRESSED) {
@@ -911,8 +920,11 @@ void Protocol_Command_Handler(Protocol_Command_t cmd, uint8_t* data, uint8_t len
       break;
 
     case CMD_GAME_CONFIG:
-      /* Handle game configuration */
-      Protocol_SendAck(cmd, 0);
+      /* Handle game configuration / new game command */
+      Othello_NewGame(&game_state);  // Reset game state to initial
+      App_DisplayGameBoard();  // Refresh display
+      Protocol_SendAck(cmd, 0);  // Send success confirmation
+      Send_GameState_Via_Protocol(&game_state);  // Send initial board state
       break;
 
     case CMD_SYSTEM_INFO:

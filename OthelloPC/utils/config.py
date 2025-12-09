@@ -39,8 +39,8 @@ class Config:
             'serial': {
                 'baud_rate': 115200,
                 'timeout': 1.0,
-                'auto_connect': True,
-                'preferred_port': None
+                'auto_connect': False,
+                'preferred_port': 'COM7'  # Default to COM7
             },
 
             # DeepSeek API设置
@@ -193,11 +193,21 @@ class Config:
 
     @property
     def serial_preferred_port(self) -> str:
-        return self.get('serial.preferred_port', '')
+        return self.get('serial.preferred_port', 'COM7')
 
     @serial_preferred_port.setter
     def serial_preferred_port(self, value: str):
         self.set('serial.preferred_port', value)
+
+    # Alias for convenience
+    @property
+    def serial_port(self) -> str:
+        """Alias for serial_preferred_port"""
+        return self.serial_preferred_port
+
+    @serial_port.setter
+    def serial_port(self, value: str):
+        self.serial_preferred_port = value
 
     @property
     def deepseek_api_key(self) -> str:

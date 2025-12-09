@@ -10,5 +10,6 @@ Analysis Package for STM32 Othello PC Client
 """
 
 from .deepseek_client import DeepSeekClient, AnalysisCache
+from .pdf_generator import PDFReportGenerator
 
-__all__ = ['DeepSeekClient', 'AnalysisCache']
+__all__ = ['DeepSeekClient', 'AnalysisCache', 'PDFReportGenerator']

@@ -65,7 +65,140 @@ You must use these exact Labels in the code (defined in `main.h`).
     * Baud Rate: **115200**.
     * Interrupt: Enabled (NVIC) for RX.
 
-### 2.3 NVIC Interrupt Priority Configuration
+### 2.3 Communication Strategy (Updated 2025-12-03)
+
+**IMPORTANT CHANGE**: To avoid resource conflict between Debug output and Protocol communication, Debug has been **disabled**.
+
+#### Single UART Mode (Current Configuration)
+* **USART1 (PA9/PA10)**:
+    * **Purpose**: PC Communication Protocol (**Exclusive**)
+    * **Baud Rate**: 115200
+    * **Mode**: Full-duplex, 8N1
+    * **Interrupt**: Enabled (NVIC Priority: 1)
+    * **Connection**: USB-TTL Module → PC (Default: **COM7**)
+
+#### Debug Output Status
+* **Debug Print**: **DISABLED** (`ENABLE_DEBUG = 0` in `debug_print.h`)
+* **Rationale**: USART1 resource is exclusively allocated to Protocol communication
+* **Alternative**: Use Protocol's `CMD_DEBUG_INFO (0x09)` to send debug messages to PC
+* **Re-enable Debug**: Set `ENABLE_DEBUG 1` and disable `Protocol_Init()` (for debugging only)
+
+#### Protocol Communication Details
+* **Packet Format**: `STX(0x02) + CMD + LEN + DATA + CHECKSUM + ETX(0x03)`
+* **Checksum Algorithm**: XOR of (CMD ^ LEN ^ DATA[0] ^ DATA[1] ^ ...)
+* **Timeout**: 1000ms per packet reception
+* **Heartbeat**: Bi-directional, every 5 seconds
+* **Commands Supported**:
+    * `CMD_BOARD_STATE (0x01)`: Game board synchronization
+    * `CMD_MAKE_MOVE (0x02)`: Move command from PC
+    * `CMD_GAME_CONFIG (0x03)`: New game / reset command
+    * `CMD_SYSTEM_INFO (0x05)`: System information query
+    * `CMD_HEARTBEAT (0x07)`: Connection heartbeat
+    * `CMD_ACK (0x08)`: Command acknowledgment
+    * `CMD_DEBUG_INFO (0x09)`: Debug message
+    * `CMD_KEY_EVENT (0x0A)`: Keypad event notification
+    * `CMD_LED_CONTROL (0x0B)`: LED control command
+    * `CMD_ERROR (0xFF)`: Error response
+
+#### Connection Verification Flow
+```
+PC → STM32: CMD_SYSTEM_INFO (0x05)
+         ↓
+STM32 → PC: System Info Response (firmware version, uptime, memory, CPU usage)
+         ↓
+PC: Mark as "Connected" (timeout: 3 seconds)
+```
+
+#### Hardware Connection Diagram
+```
+USB-TTL Module (CH340/CP2102/FT232)     STM32F103C8T6
+┌─────────────┐                         ┌─────────────┐
+│             │                         │             │
+│  TXD  ──────┼─────────────────────────┤ PA10 (RX)   │
+│  RXD  ──────┼─────────────────────────┤ PA9  (TX)   │
+│  GND  ──────┼─────────────────────────┤ GND         │
+│  VCC        │                         │ (not conn.) │
+└─────────────┘                         └─────────────┘
+   (3.3V)                                (powered by ST-Link)
+
+IMPORTANT: TX-RX are cross-connected (TXD→RX, RXD→TX)
+```
+
+#### PC Upper Computer Configuration
+* **Default Serial Port**: COM7 (configurable in `config.json`)
+* **Configuration File**: `OthelloPC/config.json`
+    ```json
+    {
+      "serial": {
+        "baud_rate": 115200,
+        "timeout": 1.0,
+        "auto_connect": false,
+        "preferred_port": "COM7"
+      }
+    }
+    ```
+* **Connection Verification**: PC sends `CMD_SYSTEM_INFO` on connect and waits 3s for response
+
+#### Code Usage Examples
+
+**STM32 Side (C)**:
+```c
+/* main.c initialization */
+// Protocol_Init() is now ENABLED (Debug is disabled)
+if (Protocol_Init() != PROTOCOL_OK) {
+    Error_Handler();
+}
+Protocol_RegisterCallback(Protocol_Command_Handler);
+
+/* Main loop */
+while(1) {
+    Protocol_Task();  // Handle timeouts & send heartbeat
+    Keypad_Scan_Task();
+    App_Main_Loop();
+    HAL_Delay(1);
+}
+
+/* Send game state to PC */
+Game_State_Data_t state = { /* ... */ };
+Protocol_SendGameState(&state);
+
+/* Send debug info (replaces DEBUG_INFO macro) */
+Protocol_SendDebugMessage("Move executed successfully");
+
+/* Handle received commands */
+void Protocol_Command_Handler(Protocol_Command_t cmd, uint8_t* data, uint8_t len) {
+    switch(cmd) {
+        case CMD_GAME_CONFIG:  // New game from PC
+            Othello_Reset();
+            App_DisplayGameBoard();
+            Protocol_SendAck(cmd, 0);
+            Send_GameState_Via_Protocol(&game_state);
+            break;
+        // ... other commands
+    }
+}
+```
+
+**PC Side (Python)**:
+```python
+# Connect to STM32
+serial_handler.connect(port='COM7')  # Uses config.serial_port
+
+# Send new game command
+serial_handler.send_new_game()
+
+# Handle responses in callback
+def on_serial_data_received(command, data):
+    if command == SerialProtocol.CMD_ACK:
+        original_cmd, status = data[0], data[1]
+        if status == 0:
+            print(f"Command 0x{original_cmd:02X} succeeded")
+    elif command == SerialProtocol.CMD_SYSTEM_INFO:
+        # Connection verified
+        connection_verified = True
+```
+
+### 2.4 NVIC Interrupt Priority Configuration
 **CRITICAL: These interrupt priorities MUST be used exactly as specified.**
 
 | Interrupt Source | NVIC Priority | Notes |
