@@ -22,6 +22,7 @@ extern "C" {
 #include "main.h"
 #include "uart_protocol.h"
 #include "othello_engine.h"
+#include "keypad_mapping.h"
 #include <stdint.h>
 #include <stdbool.h>
 

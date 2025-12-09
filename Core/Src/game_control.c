@@ -16,6 +16,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "game_control.h"
 #include "keypad_mapping.h"
+#include <stdio.h>
 #include <string.h>
 
 /* Private typedef -----------------------------------------------------------*/
