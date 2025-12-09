@@ -125,7 +125,140 @@ class ScorePanel(tk.Frame):
             fg=DieterStyle.COLORS['gray_dark']
         ).pack(side='left')
 
-        # === 累计分数（闯关模式） ===
+        # === 闯关模式统计（初始隐藏）===
+        self.challenge_frame = tk.Frame(main_container, bg='white', relief='ridge', bd=2)
+        # 初始不显示，等闯关模式启动时再显示
+
+        # 闯关标题
+        challenge_title = tk.Label(
+            self.challenge_frame,
+            text="🎯 闯关模式",
+            font=('Arial', 11, 'bold'),
+            bg='white',
+            fg=DieterStyle.COLORS['braun_orange']
+        )
+        challenge_title.pack(pady=(8, 5))
+
+        # 总分显示
+        total_score_frame = tk.Frame(self.challenge_frame, bg='white')
+        total_score_frame.pack(pady=5)
+
+        tk.Label(
+            total_score_frame,
+            text="总分:",
+            font=('Arial', 10),
+            bg='white',
+            fg=DieterStyle.COLORS['gray_dark']
+        ).pack(side='left', padx=(0, 5))
+
+        self.challenge_total_label = tk.Label(
+            total_score_frame,
+            text="0 / 188",
+            font=('Arial', 16, 'bold'),
+            bg='white',
+            fg=DieterStyle.COLORS['data_blue']
+        )
+        self.challenge_total_label.pack(side='left')
+
+        # 进度条
+        progress_frame = tk.Frame(self.challenge_frame, bg='white')
+        progress_frame.pack(fill='x', padx=15, pady=5)
+
+        self.progress_canvas = tk.Canvas(
+            progress_frame,
+            width=200,
+            height=20,
+            bg='white',
+            highlightthickness=0
+        )
+        self.progress_canvas.pack()
+
+        # 绘制进度条背景
+        self.progress_bg = self.progress_canvas.create_rectangle(
+            0, 0, 200, 20,
+            fill=DieterStyle.COLORS['gray_light'],
+            outline=DieterStyle.COLORS['gray_mid']
+        )
+        self.progress_bar = self.progress_canvas.create_rectangle(
+            0, 0, 0, 20,
+            fill=DieterStyle.COLORS['success_green'],
+            outline=''
+        )
+        self.progress_text = self.progress_canvas.create_text(
+            100, 10,
+            text="0%",
+            font=('Arial', 9, 'bold'),
+            fill=DieterStyle.COLORS['gray_dark']
+        )
+
+        # 闯关统计
+        challenge_stats_frame = tk.Frame(self.challenge_frame, bg=DieterStyle.COLORS['gray_light'])
+        challenge_stats_frame.pack(fill='x', padx=10, pady=5)
+
+        # 局数
+        stats_row1 = tk.Frame(challenge_stats_frame, bg=DieterStyle.COLORS['gray_light'])
+        stats_row1.pack(fill='x', padx=5, pady=2)
+
+        tk.Label(
+            stats_row1,
+            text="已玩局数:",
+            font=('Arial', 9),
+            bg=DieterStyle.COLORS['gray_light'],
+            fg=DieterStyle.COLORS['gray_dark']
+        ).pack(side='left')
+
+        self.challenge_games_label = tk.Label(
+            stats_row1,
+            text="0",
+            font=('Arial', 9, 'bold'),
+            bg=DieterStyle.COLORS['gray_light'],
+            fg=DieterStyle.COLORS['black']
+        )
+        self.challenge_games_label.pack(side='right')
+
+        # 胜负统计
+        stats_row2 = tk.Frame(challenge_stats_frame, bg=DieterStyle.COLORS['gray_light'])
+        stats_row2.pack(fill='x', padx=5, pady=2)
+
+        tk.Label(
+            stats_row2,
+            text="胜/负/平:",
+            font=('Arial', 9),
+            bg=DieterStyle.COLORS['gray_light'],
+            fg=DieterStyle.COLORS['gray_dark']
+        ).pack(side='left')
+
+        self.challenge_record_label = tk.Label(
+            stats_row2,
+            text="0 / 0 / 0",
+            font=('Arial', 9, 'bold'),
+            bg=DieterStyle.COLORS['gray_light'],
+            fg=DieterStyle.COLORS['black']
+        )
+        self.challenge_record_label.pack(side='right')
+
+        # 连败警告
+        stats_row3 = tk.Frame(challenge_stats_frame, bg=DieterStyle.COLORS['gray_light'])
+        stats_row3.pack(fill='x', padx=5, pady=2)
+
+        tk.Label(
+            stats_row3,
+            text="连败:",
+            font=('Arial', 9),
+            bg=DieterStyle.COLORS['gray_light'],
+            fg=DieterStyle.COLORS['gray_dark']
+        ).pack(side='left')
+
+        self.challenge_losses_label = tk.Label(
+            stats_row3,
+            text="0 / 2",
+            font=('Arial', 9, 'bold'),
+            bg=DieterStyle.COLORS['gray_light'],
+            fg=DieterStyle.COLORS['success_green']
+        )
+        self.challenge_losses_label.pack(side='right')
+
+        # === 累计分数（普通模式） ===
         total_frame = tk.Frame(main_container, bg='white', relief='ridge', bd=2)
         total_frame.pack(fill='x', padx=10, pady=5)
 
@@ -324,3 +457,55 @@ class ScorePanel(tk.Frame):
         self.black_score_label.config(text="2")
         self.white_score_label.config(text="2")
         self.update_statistics()
+
+    def show_challenge_mode(self, show: bool = True):
+        """
+        显示/隐藏闯关模式统计
+
+        Args:
+            show: True=显示，False=隐藏
+        """
+        if show:
+            self.challenge_frame.pack(fill='x', padx=10, pady=5, before=self.total_score_label.master)
+        else:
+            self.challenge_frame.pack_forget()
+
+    def update_challenge_stats(self, stats):
+        """
+        更新闯关模式统计
+
+        Args:
+            stats: ChallengeStats对象
+        """
+        # 更新总分
+        self.challenge_total_label.config(text=f"{stats.total_score} / 188")
+
+        # 更新进度条
+        progress = min(100, (stats.total_score / 188) * 100)
+        bar_width = int(200 * progress / 100)
+        self.progress_canvas.coords(self.progress_bar, 0, 0, bar_width, 20)
+        self.progress_canvas.itemconfig(self.progress_text, text=f"{progress:.0f}%")
+
+        # 根据进度改变进度条颜色
+        if progress >= 80:
+            color = DieterStyle.COLORS['success_green']
+        elif progress >= 50:
+            color = DieterStyle.COLORS['braun_orange']
+        else:
+            color = DieterStyle.COLORS['data_blue']
+        self.progress_canvas.itemconfig(self.progress_bar, fill=color)
+
+        # 更新局数
+        self.challenge_games_label.config(text=str(stats.games_played))
+
+        # 更新胜负统计
+        self.challenge_record_label.config(
+            text=f"{stats.games_won} / {stats.games_lost} / {stats.games_drawn}"
+        )
+
+        # 更新连败（带颜色警告）
+        self.challenge_losses_label.config(text=f"{stats.consecutive_losses} / 2")
+        if stats.consecutive_losses >= 1:
+            self.challenge_losses_label.config(fg=DieterStyle.COLORS['error_red'])
+        else:
+            self.challenge_losses_label.config(fg=DieterStyle.COLORS['success_green'])

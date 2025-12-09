@@ -37,6 +37,7 @@ class GameBoard(tk.Frame):
         # 鼠标交互状态
         self.hover_position: Optional[Tuple[int, int]] = None
         self.show_valid_moves = True
+        self.is_interactive = True  # 棋盘是否可交互
 
         # 创建棋盘画布
         self.canvas = Canvas(
@@ -249,6 +250,10 @@ class GameBoard(tk.Frame):
 
     def _on_click(self, event):
         """处理鼠标点击事件"""
+        # 检查棋盘是否可交互
+        if not self.is_interactive:
+            return
+
         col = event.x // self.cell_size
         row = event.y // self.cell_size
 
@@ -344,3 +349,22 @@ class GameBoard(tk.Frame):
         if 0 <= row < 8 and 0 <= col < 8:
             return (row, col)
         return None
+
+    def set_interactive(self, enabled: bool):
+        """
+        设置棋盘是否可交互
+
+        Args:
+            enabled: True=可交互，False=禁用交互
+        """
+        self.is_interactive = enabled
+
+        # 更新视觉反馈
+        if not enabled:
+            # 禁用时清除悬停效果
+            self.hover_position = None
+            self.update_board()
+            # 可选：添加半透明遮罩效果
+            self.canvas.config(cursor="arrow")
+        else:
+            self.canvas.config(cursor="hand2")

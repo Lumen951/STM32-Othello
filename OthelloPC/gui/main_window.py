@@ -24,10 +24,11 @@ from gui.history_viewer import HistoryViewerWindow
 from gui.leaderboard_window import LeaderboardWindow
 from gui.analysis_window import AnalysisReportWindow
 from communication.serial_handler import SerialHandler
-from game.game_state import GameStateManager
+from game.game_state import GameStateManager, PieceType
 from game.score_manager import ScoreManager
 from game.leaderboard import Leaderboard
 from game.challenge_mode import ChallengeMode
+from game.simple_ai import AIPlayer
 from data.game_history import GameHistoryManager
 from analysis.deepseek_client import DeepSeekClient
 
@@ -71,6 +72,10 @@ class MainWindow:
         # 闯关模式管理器
         self.challenge_mode = ChallengeMode()
 
+        # AI玩家（对抗模式）
+        self.ai_player = None
+        self.is_vs_ai_mode = False
+
         # Connection verification
         self._connection_verified = False
         self._connection_timeout_count = 0
@@ -107,11 +112,6 @@ class MainWindow:
         # 游戏控制按钮
         control_frame = tk.Frame(left_frame, bg=DieterStyle.COLORS['white'])
         control_frame.pack(fill='x', pady=(0, 10))
-
-        self.new_game_btn = DieterWidgets.create_button(
-            control_frame, "新游戏", self._new_game, 'primary'
-        )
-        self.new_game_btn.pack(side='left', padx=(0, 10))
 
         self.connect_btn = DieterWidgets.create_button(
             control_frame, "连接STM32", self._toggle_connection, 'secondary'
@@ -291,8 +291,6 @@ class MainWindow:
         # 游戏菜单
         game_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="游戏", menu=game_menu)
-        game_menu.add_command(label="新游戏", command=self._new_game)
-        game_menu.add_separator()
         game_menu.add_command(label="历史回看", command=self._open_history_viewer)
         game_menu.add_command(label="排行榜", command=self._open_leaderboard)
         game_menu.add_separator()
@@ -374,6 +372,9 @@ class MainWindow:
                 messagebox.showwarning("连接失败", "未找到可用的串口设备\n请检查：\n1. USB-TTL模块是否连接\n2. 驱动是否已安装")
                 return
 
+            # 显示"连接中"状态
+            self.update_connection_status('connecting')
+
             # 优先尝试连接COM7，如果失败则尝试其他端口
             port_to_use = 'COM7'
             if self.config and hasattr(self.config, 'serial_port'):
@@ -391,6 +392,8 @@ class MainWindow:
                 self._connection_timeout_count = 0
                 self._verify_connection_timer()
             else:
+                # 连接失败，恢复未连接状态
+                self.update_connection_status('disconnected')
                 messagebox.showerror("连接失败",
                     f"无法打开 {port_to_use} 端口\n\n请检查：\n"
                     f"1. 设备是否连接\n"
@@ -401,21 +404,21 @@ class MainWindow:
 
         except Exception as e:
             self.logger.error(f"STM32连接失败: {e}")
+            self.update_connection_status('disconnected')
             messagebox.showerror("连接错误", f"连接STM32时发生错误:\n{e}")
-
-        self._update_ui_state()
 
     def _verify_connection_timer(self):
         """验证连接的定时器（非阻塞）"""
         # 检查是否收到系统信息响应
         # 该标志在 OthelloPC.on_serial_data_received 中设置
-        app = self.root.nametowidget(".")  # 获取主应用实例的引用
-
-        # 通过共享变量检查连接状态（从main.py传递）
         if hasattr(self, '_connection_verified_flag'):
             if self._connection_verified_flag():
                 self.logger.info("STM32连接验证成功")
                 port_info = self.serial_handler.port_name or "未知端口"
+
+                # 更新为已连接状态
+                self.update_connection_status('connected')
+
                 messagebox.showinfo("连接成功",
                     f"已成功连接到STM32设备\n\n"
                     f"端口: {port_info}\n"
@@ -427,8 +430,15 @@ class MainWindow:
         self._connection_timeout_count += 1
         if self._connection_timeout_count > 6:
             self.logger.warning("STM32连接验证超时")
-            messagebox.showwarning("连接警告",
-                "已打开串口，但未收到STM32响应\n\n"
+
+            # 断开串口连接
+            self.serial_handler.disconnect()
+
+            # 更新为未连接状态
+            self.update_connection_status('disconnected')
+
+            messagebox.showwarning("连接失败",
+                "未收到STM32响应，连接已断开\n\n"
                 "可能的原因：\n"
                 "1. STM32未正常运行或未上电\n"
                 "2. 固件未更新或Protocol未启用\n"
@@ -437,7 +447,8 @@ class MainWindow:
                 "建议：\n"
                 "• 检查STM32是否运行（观察LED）\n"
                 "• 重新烧录固件\n"
-                "• 使用串口助手测试硬件连接")
+                "• 使用串口助手测试硬件连接\n\n"
+                "提示：未连接STM32时也可以在上位机玩游戏")
             return
 
         # 继续等待，500ms后再次检查
@@ -722,11 +733,57 @@ class MainWindow:
                     self.serial_handler.send_make_move(row, col, player)
 
                 self.logger.info(f"玩家走棋: {chr(ord('A') + col)}{row + 1}")
+
+                # 对抗模式：玩家走棋后，AI自动走棋
+                if self.is_vs_ai_mode and self.ai_player:
+                    # 延迟500ms后AI走棋（让玩家看到自己的走法）
+                    self.root.after(500, self._ai_make_move)
             else:
                 self.logger.warning("无效走法")
 
         except Exception as e:
             self.logger.error(f"处理玩家走棋失败: {e}")
+
+    def _ai_make_move(self):
+        """AI自动走棋"""
+        try:
+            # 检查游戏是否结束
+            game_state = self.game_manager.current_game
+            if game_state.status.value != 0:  # 游戏已结束
+                return
+
+            # 检查是否轮到AI
+            if game_state.current_player != self.ai_player.player_type:
+                return
+
+            # AI计算走法
+            move = self.ai_player.make_move(game_state)
+
+            if move:
+                row, col = move
+                self.logger.info(f"AI走棋: {chr(ord('A') + col)}{row + 1}")
+
+                # 执行走法
+                success = self.game_manager.make_move(row, col)
+
+                if success:
+                    # 更新棋盘显示
+                    if self.game_board:
+                        self.game_board.update_board()
+                        self.game_board.highlight_last_move()
+
+                    # 发送走法到STM32
+                    if self.serial_handler.is_connected():
+                        player = self.ai_player.player_type.value
+                        self.serial_handler.send_make_move(row, col, player)
+            else:
+                # AI无可用走法，跳过
+                self.logger.info("AI无可用走法，跳过")
+                # 切换到玩家
+                game_state.current_player = PieceType.BLACK
+
+        except Exception as e:
+            self.logger.error(f"AI走棋失败: {e}")
 
     def _on_game_state_changed(self, event, data=None):
         """游戏状态变化回调"""
@@ -749,33 +806,12 @@ class MainWindow:
 
             # 检查游戏结束
             if event == 'game_ended':
-                self._on_game_ended()
-
-            # 处理闯关模式
-            if event == 'game_ended' and self.challenge_mode.is_active:
-                game_state = self.game_manager.current_game
-                result = self.challenge_mode.process_game_result(
-                    game_state.black_count,
-                    game_state.white_count
-                )
-
-                if result == 'win':
-                    messagebox.showinfo(
-                        "闯关成功！",
-                        f"恭喜！您已达成胜利条件！\n\n"
-                        f"总分: {self.challenge_mode.get_stats().total_score}\n"
-                        f"游戏场次: {self.challenge_mode.get_stats().games_played}\n"
-                        f"胜场: {self.challenge_mode.get_stats().games_won}"
-                    )
-                    self.challenge_mode.end_challenge()
-                elif result == 'game_over':
-                    messagebox.showwarning(
-                        "闯关失败",
-                        f"连续输了{self.challenge_mode.MAX_LOSSES}局，挑战结束！\n\n"
-                        f"总分: {self.challenge_mode.get_stats().total_score}\n"
-                        f"游戏场次: {self.challenge_mode.get_stats().games_played}"
-                    )
-                    self.challenge_mode.end_challenge()
+                # 如果是闯关模式，先处理闯关逻辑
+                if self.challenge_mode.is_active:
+                    self._handle_challenge_game_end()
+                else:
+                    # 普通模式：调用原有的游戏结束处理
+                    self._on_game_ended()
 
         except Exception as e:
             self.logger.error(f"处理游戏状态变化失败: {e}")
@@ -783,7 +819,54 @@ class MainWindow:
     def _on_game_control_state_changed(self, new_state: str):
         """游戏控制状态变化回调"""
         self.logger.info(f"游戏控制状态变化: {new_state}")
-        # 可以在这里添加额外的状态变化处理逻辑
+
+        # 处理新游戏请求
+        if new_state == 'new_game':
+            self._new_game()
+            # 启用棋盘
+            if self.game_board:
+                self.game_board.set_interactive(True)
+
+        # 根据状态控制棋盘交互性
+        elif new_state == 'idle':
+            # 空闲状态：禁用棋盘
+            if self.game_board:
+                self.game_board.set_interactive(False)
+
+        elif new_state == 'playing':
+            # 游戏进行中：启用棋盘
+            if self.game_board:
+                self.game_board.set_interactive(True)
+
+        elif new_state == 'paused':
+            # 暂停状态：禁用棋盘
+            if self.game_board:
+                self.game_board.set_interactive(False)
+
+        elif new_state == 'ended':
+            # 结束状态：禁用棋盘并弹出分析提示
+            if self.game_board:
+                self.game_board.set_interactive(False)
+
+            # 弹出DeepSeek分析提示
+            game_state = self.game_manager.current_game
+
+            # 确定胜负
+            if game_state.status.value == 1:  # BLACK_WIN
+                winner = f"黑方（橙色）获胜 ({game_state.black_count}-{game_state.white_count})"
+            elif game_state.status.value == 2:  # WHITE_WIN
+                winner = f"白方获胜 ({game_state.white_count}-{game_state.black_count})"
+            else:  # DRAW
+                winner = f"平局 ({game_state.black_count}-{game_state.white_count})"
+
+            # 显示游戏结果并询问是否分析
+            result = messagebox.askyesno(
+                "游戏结束",
+                f"{winner}\n\n是否使用DeepSeek AI分析这局游戏？"
+            )
+
+            if result:
+                self._request_analysis()
 
     def _on_game_mode_changed(self, mode: int):
         """游戏模式变化回调"""
@@ -791,28 +874,75 @@ class MainWindow:
 
         self.logger.info(f"游戏模式变化: 0x{mode:02X}")
 
-        if mode == SerialProtocol.GAME_MODE_CHALLENGE:
+        if mode == 0x04:  # 对抗模式（双人对战）
+            # 结束AI模式
+            self.is_vs_ai_mode = False
+            self.ai_player = None
+
+            self.logger.info("对抗模式已启动（双人对战）")
+            messagebox.showinfo(
+                "对抗模式",
+                f"对抗模式已启动！\n\n"
+                f"双人对战模式\n"
+                f"玩家1执黑（橙色）\n"
+                f"玩家2执白\n\n"
+                f"轮流在棋盘上下棋，祝你们玩得愉快！"
+            )
+
+        elif mode == SerialProtocol.GAME_MODE_CHALLENGE:
+            # 启动闯关模式（人机对抗）
+            self.is_vs_ai_mode = True
+
+            # 获取AI难度
+            difficulty = self.control_panel.get_ai_difficulty()
+
+            # 创建AI玩家（AI执白）
+            self.ai_player = AIPlayer(PieceType.WHITE, difficulty)
+
             # 启动闯关模式
             self.challenge_mode.start_challenge()
-            self.logger.info("闯关模式已启动")
+
+            # 显示闯关模式统计
+            if self.score_panel:
+                self.score_panel.show_challenge_mode(True)
+                self.score_panel.update_challenge_stats(self.challenge_mode.get_stats())
+
+            self.logger.info(f"闯关模式已启动，AI难度: {self.ai_player.get_difficulty_name()}")
             messagebox.showinfo(
                 "闯关模式",
                 f"闯关模式已启动！\n\n"
+                f"与AI对战，累计分数\n"
+                f"您执黑（橙色），AI执白\n"
+                f"AI难度: {self.ai_player.get_difficulty_name()}\n\n"
                 f"目标: 累计获得 {self.challenge_mode.WIN_SCORE} 分\n"
                 f"规则: 连续输 {self.challenge_mode.MAX_LOSSES} 局即失败\n\n"
                 f"祝你好运！"
             )
+
         elif mode == SerialProtocol.GAME_MODE_NORMAL:
+            # 结束AI模式
+            self.is_vs_ai_mode = False
+            self.ai_player = None
+
             # 结束闯关模式（如果正在进行）
             if self.challenge_mode.is_active:
                 self.challenge_mode.end_challenge()
                 self.logger.info("闯关模式已结束")
+
+            # 隐藏闯关模式统计
+            if self.score_panel:
+                self.score_panel.show_challenge_mode(False)
+
         elif mode == SerialProtocol.GAME_MODE_TIMED:
+            # 结束AI模式
+            self.is_vs_ai_mode = False
+            self.ai_player = None
+
             # 计时模式（未实现）
             self.logger.info("计时模式尚未实现")
 
     def _on_game_ended(self):
-        """游戏结束处理"""
+        """游戏结束处理（普通模式）"""
         game_state = self.game_manager.current_game
 
         # 确定胜负
@@ -832,9 +962,209 @@ class MainWindow:
         if result:
             self._request_analysis()
 
-    def update_connection_status(self, is_connected: bool):
-        """更新连接状态显示"""
-        if is_connected:
+    def _handle_challenge_game_end(self):
+        """处理闯关模式游戏结束"""
+        game_state = self.game_manager.current_game
+
+        # 处理闯关结果
+        result = self.challenge_mode.process_game_result(
+            game_state.black_count,
+            game_state.white_count
+        )
+
+        # 显示本局结果
+        self._show_challenge_result(game_state, result)
+
+        # 更新闯关进度显示
+        if self.score_panel:
+            self.score_panel.update_challenge_stats(self.challenge_mode.get_stats())
+
+        # 根据结果决定下一步
+        if result == 'win':
+            # 闯关成功
+            self._show_challenge_victory()
+            self.challenge_mode.end_challenge()
+            self.is_vs_ai_mode = False
+            self.ai_player = None
+
+            # 隐藏闯关模式统计
+            if self.score_panel:
+                self.score_panel.show_challenge_mode(False)
+
+        elif result == 'game_over':
+            # 闯关失败
+            self._show_challenge_failure()
+            self.challenge_mode.end_challenge()
+            self.is_vs_ai_mode = False
+            self.ai_player = None
+
+            # 隐藏闯关模式统计
+            if self.score_panel:
+                self.score_panel.show_challenge_mode(False)
+
+        else:
+            # 继续闯关：自动开始下一局
+            self._start_next_challenge_game()
+
+    def _show_challenge_result(self, game_state, challenge_result):
+        """显示闯关本局结果"""
+        stats = self.challenge_mode.get_stats()
+
+        # 确定本局胜负
+        if game_state.black_count > game_state.white_count:
+            game_result = "🎉 胜利"
+            result_color = "green"
+        elif game_state.black_count < game_state.white_count:
+            game_result = "😢 失败"
+            result_color = "red"
+        else:
+            game_result = "🤝 平局"
+            result_color = "gray"
+
+        # 构建消息
+        message = f"本局结果: {game_result}\n"
+        message += f"本局得分: {game_state.black_count} - {game_state.white_count}\n\n"
+        message += f"━━━━━━━━━━━━━━━━\n"
+        message += f"📊 闯关进度\n"
+        message += f"━━━━━━━━━━━━━━━━\n"
+        message += f"总分: {stats.total_score} / {self.challenge_mode.WIN_SCORE}\n"
+        message += f"已玩局数: {stats.games_played}\n"
+        message += f"胜: {stats.games_won}  负: {stats.games_lost}  平: {stats.games_drawn}\n"
+        message += f"连败: {stats.consecutive_losses} / {self.challenge_mode.MAX_LOSSES}\n"
+
+        # 进度条
+        progress = self.challenge_mode.get_progress_percentage()
+        bar_length = 20
+        filled = int(bar_length * progress / 100)
+        bar = "█" * filled + "░" * (bar_length - filled)
+        message += f"\n进度: [{bar}] {progress:.1f}%\n"
+
+        # 显示提示
+        if challenge_result == 'ongoing':
+            if stats.consecutive_losses == 1:
+                message += f"\n⚠️ 警告：已连败1局，再输1局将失败！"
+            elif progress >= 80:
+                message += f"\n🔥 加油！距离胜利只差 {self.challenge_mode.WIN_SCORE - stats.total_score} 分！"
+
+        # 创建自定义对话框
+        self._show_challenge_dialog("闯关模式 - 本局结束", message)
+
+    def _show_challenge_dialog(self, title, message):
+        """显示闯关模式对话框（带动画效果）"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title(title)
+        dialog.geometry("400x450")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # 居中显示
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
+        y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
+
+        # 应用主题
+        from gui.styles import DieterStyle
+        dialog.configure(bg=DieterStyle.COLORS['white'])
+
+        # 消息内容
+        message_frame = tk.Frame(dialog, bg=DieterStyle.COLORS['white'])
+        message_frame.pack(fill='both', expand=True, padx=20, pady=20)
+
+        message_label = tk.Label(
+            message_frame,
+            text=message,
+            font=('Arial', 11),
+            bg=DieterStyle.COLORS['white'],
+            fg=DieterStyle.COLORS['gray_dark'],
+            justify='left'
+        )
+        message_label.pack()
+
+        # 倒计时标签
+        countdown_label = tk.Label(
+            dialog,
+            text="",
+            font=('Arial', 14, 'bold'),
+            bg=DieterStyle.COLORS['white'],
+            fg=DieterStyle.COLORS['braun_orange']
+        )
+        countdown_label.pack(pady=10)
+
+        # 按钮
+        button_frame = tk.Frame(dialog, bg=DieterStyle.COLORS['white'])
+        button_frame.pack(pady=10)
+
+        from gui.styles import DieterWidgets
+        ok_btn = DieterWidgets.create_button(
+            button_frame, "确定", dialog.destroy, 'primary'
+        )
+        ok_btn.pack()
+
+        # 倒计时动画（3秒后自动关闭）
+        countdown = [3]
+
+        def update_countdown():
+            if countdown[0] > 0:
+                countdown_label.config(text=f"⏱️ {countdown[0]}秒后自动开始下一局...")
+                countdown[0] -= 1
+                dialog.after(1000, update_countdown)
+            else:
+                dialog.destroy()
+
+        update_countdown()
+
+    def _show_challenge_victory(self):
+        """显示闯关成功"""
+        stats = self.challenge_mode.get_stats()
+        duration = self.challenge_mode.get_duration()
+
+        message = "🎊🎊🎊 恭喜闯关成功！🎊🎊🎊\n\n"
+        message += f"您已累计获得 {stats.total_score} 分！\n\n"
+        message += f"━━━━━━━━━━━━━━━━\n"
+        message += f"📈 最终统计\n"
+        message += f"━━━━━━━━━━━━━━━━\n"
+        message += f"总局数: {stats.games_played}\n"
+        message += f"胜: {stats.games_won}  负: {stats.games_lost}  平: {stats.games_drawn}\n"
+        message += f"胜率: {stats.games_won / stats.games_played * 100:.1f}%\n"
+
+        if duration:
+            minutes = int(duration // 60)
+            seconds = int(duration % 60)
+            message += f"用时: {minutes}分{seconds}秒\n"
+
+        messagebox.showinfo("🏆 闯关成功", message)
+
+    def _show_challenge_failure(self):
+        """显示闯关失败"""
+        stats = self.challenge_mode.get_stats()
+
+        message = "😢 闯关失败\n\n"
+        message += f"连续输了 {self.challenge_mode.MAX_LOSSES} 局，挑战结束！\n\n"
+        message += f"━━━━━━━━━━━━━━━━\n"
+        message += f"📊 最终统计\n"
+        message += f"━━━━━━━━━━━━━━━━\n"
+        message += f"总分: {stats.total_score} / {self.challenge_mode.WIN_SCORE}\n"
+        message += f"总局数: {stats.games_played}\n"
+        message += f"胜: {stats.games_won}  负: {stats.games_lost}  平: {stats.games_drawn}\n\n"
+        message += f"💪 不要气馁，再接再厉！"
+
+        messagebox.showwarning("闯关失败", message)
+
+    def _start_next_challenge_game(self):
+        """开始下一局闯关游戏"""
+        # 延迟3秒后自动开始（倒计时在对话框中显示）
+        self.root.after(3000, self._new_game)
+
+    def update_connection_status(self, status: str):
+        """
+        更新连接状态显示
+
+        Args:
+            status: 连接状态 ('disconnected', 'connecting', 'connected')
+        """
+        if status == 'connected':
             self.status_label.config(
                 text="已连接",
                 fg=DieterStyle.COLORS['success_green']
@@ -845,7 +1175,18 @@ class MainWindow:
                 text="● 已连接",
                 fg=DieterStyle.COLORS['success_green']
             )
-        else:
+        elif status == 'connecting':
+            self.status_label.config(
+                text="连接中...",
+                fg=DieterStyle.COLORS['braun_orange']
+            )
+            self.connect_btn.config(text="连接中...")
+            # 更新状态面板中的连接状态
+            self.conn_display.config(
+                text="● 连接中...",
+                fg=DieterStyle.COLORS['braun_orange']
+            )
+        else:  # disconnected
             self.status_label.config(
                 text="未连接",
                 fg=DieterStyle.COLORS['error_red']
@@ -886,7 +1227,8 @@ class MainWindow:
         """更新UI状态"""
         # 更新连接状态
         connected = self.serial_handler.is_connected()
-        self.update_connection_status(connected)
+        status = 'connected' if connected else 'disconnected'
+        self.update_connection_status(status)
 
         # 更新控制面板连接状态
         if self.control_panel:

@@ -1,5 +1,8 @@
+"./Core/Src/challenge_mode.o"
 "./Core/Src/debug_print.o"
+"./Core/Src/game_control.o"
 "./Core/Src/keypad_driver.o"
+"./Core/Src/led_text.o"
 "./Core/Src/main.o"
 "./Core/Src/othello_engine.o"
 "./Core/Src/stm32f1xx_hal_msp.o"

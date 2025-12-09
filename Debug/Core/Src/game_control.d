@@ -1,4 +1,5 @@
-Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
+Core/Src/game_control.o: ../Core/Src/game_control.c \
+ ../Core/Inc/game_control.h ../Core/Inc/main.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal.h \
  ../Core/Inc/stm32f1xx_hal_conf.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_rcc.h \
@@ -24,13 +25,9 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h \
- ../Core/Inc/ws2812b_driver.h ../Core/Inc/main.h \
- ../Core/Inc/keypad_driver.h ../Core/Inc/keypad_mapping.h \
  ../Core/Inc/uart_protocol.h ../Core/Inc/othello_engine.h \
- ../Core/Inc/game_control.h ../Core/Inc/uart_protocol.h \
- ../Core/Inc/othello_engine.h ../Core/Inc/keypad_mapping.h \
- ../Core/Inc/challenge_mode.h ../Core/Inc/led_text.h \
- ../Core/Inc/ws2812b_driver.h ../Core/Inc/debug_print.h
+ ../Core/Inc/keypad_mapping.h ../Core/Inc/keypad_mapping.h
+../Core/Inc/game_control.h:
 ../Core/Inc/main.h:
 ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal.h:
 ../Core/Inc/stm32f1xx_hal_conf.h:
@@ -57,17 +54,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h:
 ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h:
 ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h:
-../Core/Inc/ws2812b_driver.h:
-../Core/Inc/main.h:
-../Core/Inc/keypad_driver.h:
-../Core/Inc/keypad_mapping.h:
-../Core/Inc/uart_protocol.h:
-../Core/Inc/othello_engine.h:
-../Core/Inc/game_control.h:
 ../Core/Inc/uart_protocol.h:
 ../Core/Inc/othello_engine.h:
 ../Core/Inc/keypad_mapping.h:
-../Core/Inc/challenge_mode.h:
-../Core/Inc/led_text.h:
-../Core/Inc/ws2812b_driver.h:
-../Core/Inc/debug_print.h:
+../Core/Inc/keypad_mapping.h:

@@ -1,0 +1,16 @@
+../Core/Src/challenge_mode.c:32:20:Challenge_Init	1
+../Core/Src/challenge_mode.c:44:20:Challenge_Start	2
+../Core/Src/challenge_mode.c:69:20:Challenge_End	2
+../Core/Src/challenge_mode.c:86:20:Challenge_ProcessGameResult	8
+../Core/Src/challenge_mode.c:141:28:Challenge_GetContext	1
+../Core/Src/challenge_mode.c:149:19:Challenge_GetState	1
+../Core/Src/challenge_mode.c:157:10:Challenge_GetTotalScore	1
+../Core/Src/challenge_mode.c:165:9:Challenge_GetConsecutiveLosses	1
+../Core/Src/challenge_mode.c:173:9:Challenge_GetGamesPlayed	1
+../Core/Src/challenge_mode.c:181:6:Challenge_IsWinConditionMet	1
+../Core/Src/challenge_mode.c:189:6:Challenge_IsGameOverConditionMet	1
+../Core/Src/challenge_mode.c:197:20:Challenge_Reset	1
+../Core/Src/challenge_mode.c:205:20:Challenge_SendStatusUpdate	3
+../Core/Src/challenge_mode.c:229:10:Challenge_GetDuration	2
+../Core/Src/challenge_mode.c:243:13:Challenge_UpdateState	3
+../Core/Src/challenge_mode.c:264:13:Challenge_DisplayResult	3

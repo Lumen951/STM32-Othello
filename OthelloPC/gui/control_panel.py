@@ -75,7 +75,7 @@ class ControlPanel(tk.Frame):
         row1.pack(fill='x', pady=(0, 5))
 
         self.start_btn = DieterWidgets.create_button(
-            row1, "▶ 开始", self._on_start, 'primary'
+            row1, "▶ 开始/重启", self._on_start, 'primary'
         )
         self.start_btn.pack(side='left', padx=(0, 5), fill='x', expand=True)
 
@@ -125,13 +125,38 @@ class ControlPanel(tk.Frame):
         self.mode_combo = ttk.Combobox(
             mode_frame,
             textvariable=self.mode_var,
-            values=["普通模式", "闯关模式", "计时模式"],
+            values=["普通模式", "对抗模式", "闯关模式", "计时模式"],
             state='readonly',
             width=12,
             font=('Arial', 10)
         )
         self.mode_combo.pack(side='left', fill='x', expand=True)
         self.mode_combo.bind('<<ComboboxSelected>>', self._on_mode_changed)
+
+        # === AI难度选择（仅对抗模式可见）===
+        self.ai_difficulty_frame = tk.Frame(main_container, bg=DieterStyle.COLORS['board_bg'])
+        self.ai_difficulty_frame.pack(fill='x', padx=10, pady=5)
+        self.ai_difficulty_frame.pack_forget()  # 初始隐藏
+
+        ai_label = tk.Label(
+            self.ai_difficulty_frame,
+            text="AI难度:",
+            font=('Arial', 10, 'bold'),
+            bg=DieterStyle.COLORS['board_bg'],
+            fg=DieterStyle.COLORS['gray_dark']
+        )
+        ai_label.pack(side='left', padx=(0, 10))
+
+        self.ai_difficulty_var = tk.StringVar(value="中等")
+        self.ai_difficulty_combo = ttk.Combobox(
+            self.ai_difficulty_frame,
+            textvariable=self.ai_difficulty_var,
+            values=["简单", "中等", "困难"],
+            state='readonly',
+            width=12,
+            font=('Arial', 10)
+        )
+        self.ai_difficulty_combo.pack(side='left', fill='x', expand=True)
 
         # === 状态显示 ===
         status_frame = tk.Frame(main_container, bg='white', relief='ridge', bd=2)
@@ -160,7 +185,7 @@ class ControlPanel(tk.Frame):
 
         hint_label = tk.Label(
             hint_frame,
-            text="💡 下位机按键:\n1=开始 *=暂停 #=继续\nD=结束 0=重置",
+            text="💡 提示:\n• 未连接STM32时可在上位机玩游戏\n• 连接后可同步控制下位机\n• 下位机按键: 1=开始 *=暂停 #=继续",
             font=('Arial', 9),
             bg=DieterStyle.COLORS['board_bg'],
             fg=DieterStyle.COLORS['gray_mid'],
@@ -169,64 +194,78 @@ class ControlPanel(tk.Frame):
         hint_label.pack()
 
     def _on_start(self):
-        """开始游戏"""
-        if not self.serial_handler.is_connected():
-            self.logger.warning("未连接到STM32，无法发送命令")
-            return
+        """开始/重启游戏"""
+        self.logger.info("开始/重启游戏")
 
-        self.logger.info("发送开始游戏命令")
-        if self.serial_handler.send_game_start():
-            self._set_state('playing')
+        # 触发新游戏（通过回调通知主窗口）
+        if self.on_state_change:
+            self.on_state_change('new_game')
+
+        # 如果连接了STM32，发送开始命令
+        if self.serial_handler.is_connected():
+            if self.serial_handler.send_game_start():
+                self._set_state('playing')
+            else:
+                self.logger.error("发送开始命令失败")
         else:
-            self.logger.error("发送开始命令失败")
+            # 未连接时也可以开始游戏（仅上位机）
+            self._set_state('playing')
 
     def _on_pause(self):
         """暂停游戏"""
-        if not self.serial_handler.is_connected():
-            self.logger.warning("未连接到STM32，无法发送命令")
-            return
+        self.logger.info("暂停游戏")
 
-        self.logger.info("发送暂停游戏命令")
-        if self.serial_handler.send_game_pause():
-            self._set_state('paused')
+        # 如果连接了STM32，发送暂停命令
+        if self.serial_handler.is_connected():
+            if self.serial_handler.send_game_pause():
+                self._set_state('paused')
+            else:
+                self.logger.error("发送暂停命令失败")
         else:
-            self.logger.error("发送暂停命令失败")
+            # 未连接时也可以暂停（仅上位机）
+            self._set_state('paused')
 
     def _on_resume(self):
         """继续游戏"""
-        if not self.serial_handler.is_connected():
-            self.logger.warning("未连接到STM32，无法发送命令")
-            return
+        self.logger.info("继续游戏")
 
-        self.logger.info("发送继续游戏命令")
-        if self.serial_handler.send_game_resume():
-            self._set_state('playing')
+        # 如果连接了STM32，发送继续命令
+        if self.serial_handler.is_connected():
+            if self.serial_handler.send_game_resume():
+                self._set_state('playing')
+            else:
+                self.logger.error("发送继续命令失败")
         else:
-            self.logger.error("发送继续命令失败")
+            # 未连接时也可以继续（仅上位机）
+            self._set_state('playing')
 
     def _on_end(self):
         """结束游戏"""
-        if not self.serial_handler.is_connected():
-            self.logger.warning("未连接到STM32，无法发送命令")
-            return
+        self.logger.info("结束游戏")
 
-        self.logger.info("发送结束游戏命令")
-        if self.serial_handler.send_game_end():
-            self._set_state('ended')
+        # 如果连接了STM32，发送结束命令
+        if self.serial_handler.is_connected():
+            if self.serial_handler.send_game_end():
+                self._set_state('ended')
+            else:
+                self.logger.error("发送结束命令失败")
         else:
-            self.logger.error("发送结束命令失败")
+            # 未连接时也可以结束（仅上位机）
+            self._set_state('ended')
 
     def _on_reset(self):
         """重置游戏"""
-        if not self.serial_handler.is_connected():
-            self.logger.warning("未连接到STM32，无法发送命令")
-            return
+        self.logger.info("重置游戏")
 
-        self.logger.info("发送重置游戏命令")
-        if self.serial_handler.send_game_reset():
-            self._set_state('idle')
+        # 如果连接了STM32，发送重置命令
+        if self.serial_handler.is_connected():
+            if self.serial_handler.send_game_reset():
+                self._set_state('idle')
+            else:
+                self.logger.error("发送重置命令失败")
         else:
-            self.logger.error("发送重置命令失败")
+            # 未连接时也可以重置（仅上位机）
+            self._set_state('idle')
 
     def _on_mode_changed(self, event=None):
         """模式选择变化"""
@@ -235,15 +274,27 @@ class ControlPanel(tk.Frame):
         # 映射模式名称到协议常量
         mode_map = {
             "普通模式": SerialProtocol.GAME_MODE_NORMAL,
+            "对抗模式": 0x04,  # 对抗模式（双人对战）
             "闯关模式": SerialProtocol.GAME_MODE_CHALLENGE,
             "计时模式": SerialProtocol.GAME_MODE_TIMED
         }
 
         self.current_mode = mode_map.get(mode_name, SerialProtocol.GAME_MODE_NORMAL)
 
+        # 显示/隐藏AI难度选择（仅闯关模式可见）
+        if mode_name == "闯关模式":
+            self.ai_difficulty_frame.pack(fill='x', padx=10, pady=5, after=self.mode_combo.master)
+        else:
+            self.ai_difficulty_frame.pack_forget()
+
         # 调用模式变化回调
         if self.on_mode_change:
             self.on_mode_change(self.current_mode)
+
+        # 对抗模式不需要发送到STM32（仅上位机双人对战）
+        if mode_name == "对抗模式":
+            self.logger.info("切换到对抗模式（双人对战）")
+            return
 
         if not self.serial_handler.is_connected():
             self.logger.warning("未连接到STM32，无法发送模式选择命令")
@@ -316,18 +367,10 @@ class ControlPanel(tk.Frame):
         self.state_display.config(text=text, fg=color)
 
     def set_connection_state(self, connected: bool):
-        """设置连接状态"""
-        if not connected:
-            # 断开连接时禁用所有控制按钮
-            self.start_btn.config(state='disabled')
-            self.pause_btn.config(state='disabled')
-            self.resume_btn.config(state='disabled')
-            self.end_btn.config(state='disabled')
-            self.reset_btn.config(state='disabled')
-            self.mode_combo.config(state='disabled')
-        else:
-            # 连接时根据当前状态更新按钮
-            self._update_button_states()
+        """设置连接状态（不影响按钮可用性）"""
+        # 无论是否连接，按钮都保持可用
+        # 连接状态仅影响是否向STM32发送命令
+        self._update_button_states()
 
     def get_current_state(self) -> str:
         """获取当前游戏状态"""
@@ -336,3 +379,17 @@ class ControlPanel(tk.Frame):
     def get_current_mode(self) -> int:
         """获取当前游戏模式"""
         return self.current_mode
+
+    def get_ai_difficulty(self) -> int:
+        """
+        获取AI难度等级
+
+        Returns:
+            0=简单, 1=中等, 2=困难
+        """
+        difficulty_map = {
+            "简单": 0,
+            "中等": 1,
+            "困难": 2
+        }
+        return difficulty_map.get(self.ai_difficulty_var.get(), 1)
