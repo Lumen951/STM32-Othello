@@ -21,7 +21,8 @@ from communication.serial_handler import SerialProtocol
 class ControlPanel(tk.Frame):
     """游戏控制面板"""
 
-    def __init__(self, parent, serial_handler, on_state_change: Optional[Callable] = None):
+    def __init__(self, parent, serial_handler, on_state_change: Optional[Callable] = None,
+                 on_mode_change: Optional[Callable] = None):
         """
         初始化控制面板
 
@@ -29,11 +30,13 @@ class ControlPanel(tk.Frame):
             parent: 父容器
             serial_handler: 串口处理器
             on_state_change: 状态变化回调函数
+            on_mode_change: 模式变化回调函数
         """
         super().__init__(parent, bg=DieterStyle.COLORS['white'])
 
         self.serial_handler = serial_handler
         self.on_state_change = on_state_change
+        self.on_mode_change = on_mode_change
         self.logger = logging.getLogger(__name__)
 
         # 当前游戏状态
@@ -237,6 +240,10 @@ class ControlPanel(tk.Frame):
         }
 
         self.current_mode = mode_map.get(mode_name, SerialProtocol.GAME_MODE_NORMAL)
+
+        # 调用模式变化回调
+        if self.on_mode_change:
+            self.on_mode_change(self.current_mode)
 
         if not self.serial_handler.is_connected():
             self.logger.warning("未连接到STM32，无法发送模式选择命令")

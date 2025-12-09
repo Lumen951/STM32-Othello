@@ -785,6 +785,32 @@ class MainWindow:
         self.logger.info(f"游戏控制状态变化: {new_state}")
         # 可以在这里添加额外的状态变化处理逻辑
 
+    def _on_game_mode_changed(self, mode: int):
+        """游戏模式变化回调"""
+        from communication.serial_handler import SerialProtocol
+
+        self.logger.info(f"游戏模式变化: 0x{mode:02X}")
+
+        if mode == SerialProtocol.GAME_MODE_CHALLENGE:
+            # 启动闯关模式
+            self.challenge_mode.start_challenge()
+            self.logger.info("闯关模式已启动")
+            messagebox.showinfo(
+                "闯关模式",
+                f"闯关模式已启动！\n\n"
+                f"目标: 累计获得 {self.challenge_mode.WIN_SCORE} 分\n"
+                f"规则: 连续输 {self.challenge_mode.MAX_LOSSES} 局即失败\n\n"
+                f"祝你好运！"
+            )
+        elif mode == SerialProtocol.GAME_MODE_NORMAL:
+            # 结束闯关模式（如果正在进行）
+            if self.challenge_mode.is_active:
+                self.challenge_mode.end_challenge()
+                self.logger.info("闯关模式已结束")
+        elif mode == SerialProtocol.GAME_MODE_TIMED:
+            # 计时模式（未实现）
+            self.logger.info("计时模式尚未实现")
+
     def _on_game_ended(self):
         """游戏结束处理"""
         game_state = self.game_manager.current_game
