@@ -28,6 +28,8 @@
 #include "uart_protocol.h"
 #include "othello_engine.h"
 #include "game_control.h"
+#include "challenge_mode.h"
+#include "led_text.h"
 #include "debug_print.h"
 /* USER CODE END Includes */
 
@@ -63,6 +65,9 @@ static uint8_t cursor_row = 3;          // Cursor row position (initial: board c
 static uint8_t cursor_col = 3;          // Cursor column position (initial: board center)
 static bool cursor_visible = true;      // Cursor visibility (for blinking)
 static uint32_t cursor_blink_timer = 0; // Cursor blink timer
+
+/* Game mode variables */
+static Game_Mode_t current_game_mode = GAME_MODE_NORMAL;  // Current game mode
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -475,6 +480,20 @@ void App_Init(void)
   }
   DEBUG_INFO("[INIT] Game Control...OK\r\n");
 
+  /* Initialize challenge mode module */
+  if (Challenge_Init() != CHALLENGE_OK) {
+    DEBUG_ERROR("[INIT] Challenge Mode...FAILED\r\n");
+    Error_Handler();
+  }
+  DEBUG_INFO("[INIT] Challenge Mode...OK\r\n");
+
+  /* Initialize LED text display module */
+  if (LED_Text_Init() != LED_TEXT_OK) {
+    DEBUG_ERROR("[INIT] LED Text...FAILED\r\n");
+    Error_Handler();
+  }
+  DEBUG_INFO("[INIT] LED Text...OK\r\n");
+
   /* Start new game */
   if (Othello_NewGame(&game_state) == OTHELLO_OK) {
     game_initialized = true;
@@ -821,6 +840,26 @@ void App_HandleGameOver(void)
   /* Update statistics */
   Othello_UpdateStats(&game_stats, &game_state);
 
+  /* Process challenge mode if active */
+  if (current_game_mode == GAME_MODE_CHALLENGE) {
+    Challenge_Status_t challenge_status = Challenge_ProcessGameResult(&game_state);
+
+    if (challenge_status == CHALLENGE_WIN) {
+      DEBUG_INFO("[CHALLENGE] WIN condition met! Total score: %d\r\n",
+                 Challenge_GetTotalScore());
+      // LED text display is handled by Challenge_ProcessGameResult
+      HAL_Delay(3000);  // Display WIN for 3 seconds
+    } else if (challenge_status == CHALLENGE_GAME_OVER) {
+      DEBUG_INFO("[CHALLENGE] GAME OVER! Consecutive losses: %d\r\n",
+                 Challenge_GetConsecutiveLosses());
+      // LED text display is handled by Challenge_ProcessGameResult
+      HAL_Delay(3000);  // Display OVER for 3 seconds
+    } else {
+      DEBUG_INFO("[CHALLENGE] Game %d completed. Total score: %d\r\n",
+                 Challenge_GetGamesPlayed(), Challenge_GetTotalScore());
+    }
+  }
+
   /* Show winner on board */
   PieceType_t winner = Othello_GetWinner(&game_state);
   WS2812B_Clear();
@@ -1000,6 +1039,39 @@ void Protocol_Command_Handler(Protocol_Command_t cmd, uint8_t* data, uint8_t len
         }
       } else {
         Protocol_SendAck(cmd, 3);  // Invalid length
+      }
+      break;
+
+    case CMD_MODE_SELECT:
+      /* Handle game mode selection */
+      if (len == sizeof(Mode_Select_Data_t)) {
+        Mode_Select_Data_t* mode_data = (Mode_Select_Data_t*)data;
+        current_game_mode = (Game_Mode_t)mode_data->mode;
+
+        if (current_game_mode == GAME_MODE_CHALLENGE) {
+          // Start challenge mode
+          if (Challenge_Start() == CHALLENGE_OK) {
+            DEBUG_INFO("[MODE] Challenge mode started\r\n");
+            Protocol_SendAck(cmd, 0);  // Success
+          } else {
+            Protocol_SendAck(cmd, 2);  // Challenge start failed
+          }
+        } else if (current_game_mode == GAME_MODE_NORMAL) {
+          // End challenge mode if active
+          if (Challenge_GetState() != CHALLENGE_STATE_INACTIVE) {
+            Challenge_End();
+          }
+          DEBUG_INFO("[MODE] Normal mode selected\r\n");
+          Protocol_SendAck(cmd, 0);  // Success
+        } else if (current_game_mode == GAME_MODE_TIMED) {
+          // Timed mode not yet implemented
+          DEBUG_INFO("[MODE] Timed mode not yet implemented\r\n");
+          Protocol_SendAck(cmd, 1);  // Not implemented
+        } else {
+          Protocol_SendAck(cmd, 3);  // Invalid mode
+        }
+      } else {
+        Protocol_SendAck(cmd, 4);  // Invalid length
       }
       break;
 

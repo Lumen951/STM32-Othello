@@ -27,6 +27,7 @@ from communication.serial_handler import SerialHandler
 from game.game_state import GameStateManager
 from game.score_manager import ScoreManager
 from game.leaderboard import Leaderboard
+from game.challenge_mode import ChallengeMode
 from data.game_history import GameHistoryManager
 from analysis.deepseek_client import DeepSeekClient
 
@@ -66,6 +67,9 @@ class MainWindow:
 
         # 排行榜管理器
         self.leaderboard = Leaderboard()
+
+        # 闯关模式管理器
+        self.challenge_mode = ChallengeMode()
 
         # Connection verification
         self._connection_verified = False
@@ -139,7 +143,8 @@ class MainWindow:
         self.control_panel = ControlPanel(
             right_frame,
             self.serial_handler,
-            on_state_change=self._on_game_control_state_changed
+            on_state_change=self._on_game_control_state_changed,
+            on_mode_change=self._on_game_mode_changed
         )
         self.control_panel.pack(fill='x', pady=(0, 10))
 
@@ -745,6 +750,32 @@ class MainWindow:
             # 检查游戏结束
             if event == 'game_ended':
                 self._on_game_ended()
+
+            # 处理闯关模式
+            if event == 'game_ended' and self.challenge_mode.is_active:
+                game_state = self.game_manager.current_game
+                result = self.challenge_mode.process_game_result(
+                    game_state.black_count,
+                    game_state.white_count
+                )
+
+                if result == 'win':
+                    messagebox.showinfo(
+                        "闯关成功！",
+                        f"恭喜！您已达成胜利条件！\n\n"
+                        f"总分: {self.challenge_mode.get_stats().total_score}\n"
+                        f"游戏场次: {self.challenge_mode.get_stats().games_played}\n"
+                        f"胜场: {self.challenge_mode.get_stats().games_won}"
+                    )
+                    self.challenge_mode.end_challenge()
+                elif result == 'game_over':
+                    messagebox.showwarning(
+                        "闯关失败",
+                        f"连续输了{self.challenge_mode.MAX_LOSSES}局，挑战结束！\n\n"
+                        f"总分: {self.challenge_mode.get_stats().total_score}\n"
+                        f"游戏场次: {self.challenge_mode.get_stats().games_played}"
+                    )
+                    self.challenge_mode.end_challenge()
 
         except Exception as e:
             self.logger.error(f"处理游戏状态变化失败: {e}")
