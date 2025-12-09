@@ -37,10 +37,14 @@ class Config:
         self.default_config = {
             # 串口设置
             'serial': {
-                'baud_rate': 115200,
-                'timeout': 1.0,
-                'auto_connect': False,
-                'preferred_port': 'COM7'  # Default to COM7
+                'port': 'COM7',  # 串口名称
+                'baud_rate': 115200,  # 波特率
+                'data_bits': 8,  # 数据位
+                'stop_bits': 1,  # 停止位
+                'parity': 'None',  # 校验位
+                'timeout': 1.0,  # 超时时间
+                'auto_connect': False,  # 自动连接
+                'preferred_port': 'COM7'  # 首选端口（向后兼容）
             },
 
             # DeepSeek API设置
