@@ -434,6 +434,61 @@ Protocol_Status_t Protocol_SendDebugMessage(const char* message)
 }
 
 /**
+ * @brief Send game control command
+ */
+Protocol_Status_t Protocol_SendGameControl(Game_Control_Action_t action)
+{
+    Game_Control_Data_t control_data = {
+        .action = action,
+        .timestamp = HAL_GetTick()
+    };
+
+    return Protocol_SendPacket(CMD_GAME_CONTROL, (uint8_t*)&control_data, sizeof(Game_Control_Data_t));
+}
+
+/**
+ * @brief Send mode select command
+ */
+Protocol_Status_t Protocol_SendModeSelect(Game_Mode_t mode, uint16_t time_limit)
+{
+    Mode_Select_Data_t mode_data = {
+        .mode = mode,
+        .time_limit = time_limit
+    };
+
+    return Protocol_SendPacket(CMD_MODE_SELECT, (uint8_t*)&mode_data, sizeof(Mode_Select_Data_t));
+}
+
+/**
+ * @brief Send score update
+ */
+Protocol_Status_t Protocol_SendScoreUpdate(uint8_t black_score, uint8_t white_score,
+                                          uint16_t total_score, uint8_t game_result)
+{
+    Score_Update_Data_t score_data = {
+        .black_score = black_score,
+        .white_score = white_score,
+        .total_score = total_score,
+        .game_result = game_result
+    };
+
+    return Protocol_SendPacket(CMD_SCORE_UPDATE, (uint8_t*)&score_data, sizeof(Score_Update_Data_t));
+}
+
+/**
+ * @brief Send timer update
+ */
+Protocol_Status_t Protocol_SendTimerUpdate(uint16_t remaining_time, uint8_t timer_state)
+{
+    Timer_Update_Data_t timer_data = {
+        .remaining_time = remaining_time,
+        .timer_state = timer_state
+    };
+
+    return Protocol_SendPacket(CMD_TIMER_UPDATE, (uint8_t*)&timer_data, sizeof(Timer_Update_Data_t));
+}
+
+/**
  * @brief UART RX interrupt callback
  */
 void Protocol_UART_RxCallback(UART_HandleTypeDef *huart)

@@ -22,9 +22,9 @@ class SerialProtocol:
     """串口协议定义"""
 
     # 协议常量
-    PACKET_HEADER = 0xAA
-    PACKET_FOOTER = 0x55
-    MAX_DATA_LENGTH = 64
+    PACKET_HEADER = 0x02  # STX
+    PACKET_FOOTER = 0x03  # ETX
+    MAX_DATA_LENGTH = 255
 
     # 命令定义
     CMD_BOARD_STATE = 0x01      # 棋盘状态同步
@@ -37,28 +37,47 @@ class SerialProtocol:
     CMD_CONFIG_SET = 0x08       # 配置设置
     CMD_CONFIG_GET = 0x09       # 配置获取
     CMD_KEY_EVENT = 0x0A        # 按键事件
+    CMD_GAME_CONTROL = 0x0C     # 游戏控制
+    CMD_MODE_SELECT = 0x0D      # 模式选择
+    CMD_SCORE_UPDATE = 0x0E     # 分数更新
+    CMD_TIMER_UPDATE = 0x0F     # 计时器更新
+
+    # 游戏控制动作
+    GAME_ACTION_START = 0x01    # 开始游戏
+    GAME_ACTION_PAUSE = 0x02    # 暂停游戏
+    GAME_ACTION_RESUME = 0x03   # 继续游戏
+    GAME_ACTION_END = 0x04      # 结束游戏
+    GAME_ACTION_RESET = 0x05    # 重置游戏
+
+    # 游戏模式
+    GAME_MODE_NORMAL = 0x01     # 普通模式
+    GAME_MODE_CHALLENGE = 0x02  # 闯关模式
+    GAME_MODE_TIMED = 0x03      # 计时模式
 
     @staticmethod
-    def calculate_checksum(data: bytes) -> int:
-        """计算校验和"""
-        return sum(data) & 0xFF
+    def calculate_checksum(command: int, length: int, data: bytes) -> int:
+        """计算校验和 (XOR算法)"""
+        checksum = command ^ length
+        for byte in data:
+            checksum ^= byte
+        return checksum
 
     @staticmethod
     def create_packet(command: int, data: bytes = b'') -> bytes:
-        """创建数据包"""
+        """创建数据包 (格式: STX + CMD + LEN + DATA + CHECKSUM + ETX)"""
         if len(data) > SerialProtocol.MAX_DATA_LENGTH:
             raise ValueError("数据长度超出限制")
 
         packet = bytearray()
-        packet.append(SerialProtocol.PACKET_HEADER)
+        packet.append(SerialProtocol.PACKET_HEADER)  # STX
         packet.append(command)
         packet.append(len(data))
         packet.extend(data)
 
-        # 计算校验和（不包括包头包尾）
-        checksum = SerialProtocol.calculate_checksum(packet[1:])
+        # 计算校验和 (XOR: CMD ^ LEN ^ DATA[0] ^ DATA[1] ^ ...)
+        checksum = SerialProtocol.calculate_checksum(command, len(data), data)
         packet.append(checksum)
-        packet.append(SerialProtocol.PACKET_FOOTER)
+        packet.append(SerialProtocol.PACKET_FOOTER)  # ETX
 
         return bytes(packet)
 
@@ -80,8 +99,8 @@ class SerialProtocol:
         packet_data = data[3:3+data_len]
         checksum = data[3+data_len]
 
-        # 验证校验和
-        calculated_checksum = SerialProtocol.calculate_checksum(data[1:-2])
+        # 验证校验和 (XOR算法)
+        calculated_checksum = SerialProtocol.calculate_checksum(command, data_len, packet_data)
         if checksum != calculated_checksum:
             return None
 
@@ -301,6 +320,85 @@ class SerialHandler:
     def send_config_get(self) -> bool:
         """获取配置"""
         return self.send_command(SerialProtocol.CMD_CONFIG_GET)
+
+    def send_game_control(self, action: int) -> bool:
+        """
+        发送游戏控制命令
+
+        Args:
+            action: 游戏控制动作 (GAME_ACTION_START/PAUSE/RESUME/END/RESET)
+
+        Returns:
+            bool: 发送是否成功
+        """
+        timestamp = int(time.time() * 1000) & 0xFFFFFFFF
+        data = struct.pack('<BI', action, timestamp)
+        return self.send_command(SerialProtocol.CMD_GAME_CONTROL, data)
+
+    def send_game_start(self) -> bool:
+        """发送开始游戏命令"""
+        return self.send_game_control(SerialProtocol.GAME_ACTION_START)
+
+    def send_game_pause(self) -> bool:
+        """发送暂停游戏命令"""
+        return self.send_game_control(SerialProtocol.GAME_ACTION_PAUSE)
+
+    def send_game_resume(self) -> bool:
+        """发送继续游戏命令"""
+        return self.send_game_control(SerialProtocol.GAME_ACTION_RESUME)
+
+    def send_game_end(self) -> bool:
+        """发送结束游戏命令"""
+        return self.send_game_control(SerialProtocol.GAME_ACTION_END)
+
+    def send_game_reset(self) -> bool:
+        """发送重置游戏命令"""
+        return self.send_game_control(SerialProtocol.GAME_ACTION_RESET)
+
+    def send_mode_select(self, mode: int, time_limit: int = 0) -> bool:
+        """
+        发送模式选择命令
+
+        Args:
+            mode: 游戏模式 (GAME_MODE_NORMAL/CHALLENGE/TIMED)
+            time_limit: 时间限制（秒），仅用于计时模式
+
+        Returns:
+            bool: 发送是否成功
+        """
+        data = struct.pack('<BH', mode, time_limit)
+        return self.send_command(SerialProtocol.CMD_MODE_SELECT, data)
+
+    def send_score_update(self, black_score: int, white_score: int,
+                         total_score: int = 0, game_result: int = 0) -> bool:
+        """
+        发送分数更新
+
+        Args:
+            black_score: 黑子分数
+            white_score: 白子分数
+            total_score: 累计总分（闯关模式）
+            game_result: 游戏结果 (0=进行中, 1=黑胜, 2=白胜, 3=平局)
+
+        Returns:
+            bool: 发送是否成功
+        """
+        data = struct.pack('<BBHB', black_score, white_score, total_score, game_result)
+        return self.send_command(SerialProtocol.CMD_SCORE_UPDATE, data)
+
+    def send_timer_update(self, remaining_time: int, timer_state: int) -> bool:
+        """
+        发送计时器更新
+
+        Args:
+            remaining_time: 剩余时间（秒）
+            timer_state: 计时器状态 (0=停止, 1=运行, 2=暂停, 3=超时)
+
+        Returns:
+            bool: 发送是否成功
+        """
+        data = struct.pack('<HB', remaining_time, timer_state)
+        return self.send_command(SerialProtocol.CMD_TIMER_UPDATE, data)
 
     def _auto_detect_port(self) -> Optional[str]:
         """自动检测STM32设备端口"""

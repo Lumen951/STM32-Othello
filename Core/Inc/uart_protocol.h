@@ -54,6 +54,10 @@ typedef enum {
     CMD_DEBUG_INFO     = 0x09,     ///< Debug information
     CMD_KEY_EVENT      = 0x0A,     ///< Keypad event
     CMD_LED_CONTROL    = 0x0B,     ///< LED control command
+    CMD_GAME_CONTROL   = 0x0C,     ///< Game control (start/pause/resume/end/reset)
+    CMD_MODE_SELECT    = 0x0D,     ///< Game mode selection (normal/challenge/timed)
+    CMD_SCORE_UPDATE   = 0x0E,     ///< Score update notification
+    CMD_TIMER_UPDATE   = 0x0F,     ///< Timer update notification
     CMD_ERROR          = 0xFF      ///< Error response
 } Protocol_Command_t;
 
@@ -148,6 +152,60 @@ typedef struct {
     uint16_t keypad_scans;          ///< Keypad scans per second
     uint16_t led_updates;           ///< LED updates per second
 } System_Info_Data_t;
+
+/**
+ * @brief Game control action enumeration
+ */
+typedef enum {
+    GAME_ACTION_START   = 0x01,     ///< Start new game
+    GAME_ACTION_PAUSE   = 0x02,     ///< Pause game
+    GAME_ACTION_RESUME  = 0x03,     ///< Resume game
+    GAME_ACTION_END     = 0x04,     ///< End game
+    GAME_ACTION_RESET   = 0x05      ///< Reset game
+} Game_Control_Action_t;
+
+/**
+ * @brief Game control data structure (for CMD_GAME_CONTROL)
+ */
+typedef struct {
+    uint8_t action;                 ///< Game control action (Game_Control_Action_t)
+    uint32_t timestamp;             ///< Command timestamp
+} Game_Control_Data_t;
+
+/**
+ * @brief Game mode enumeration
+ */
+typedef enum {
+    GAME_MODE_NORMAL    = 0x01,     ///< Normal mode
+    GAME_MODE_CHALLENGE = 0x02,     ///< Challenge mode (cumulative score)
+    GAME_MODE_TIMED     = 0x03      ///< Timed mode (countdown timer)
+} Game_Mode_t;
+
+/**
+ * @brief Mode select data structure (for CMD_MODE_SELECT)
+ */
+typedef struct {
+    uint8_t mode;                   ///< Game mode (Game_Mode_t)
+    uint16_t time_limit;            ///< Time limit in seconds (for timed mode, 0 for others)
+} Mode_Select_Data_t;
+
+/**
+ * @brief Score update data structure (for CMD_SCORE_UPDATE)
+ */
+typedef struct {
+    uint8_t black_score;            ///< Current black score
+    uint8_t white_score;            ///< Current white score
+    uint16_t total_score;           ///< Total cumulative score (for challenge mode)
+    uint8_t game_result;            ///< Game result (0=ongoing, 1=black_win, 2=white_win, 3=draw)
+} Score_Update_Data_t;
+
+/**
+ * @brief Timer update data structure (for CMD_TIMER_UPDATE)
+ */
+typedef struct {
+    uint16_t remaining_time;        ///< Remaining time in seconds
+    uint8_t timer_state;            ///< Timer state (0=stopped, 1=running, 2=paused, 3=expired)
+} Timer_Update_Data_t;
 
 /**
  * @brief Protocol callback function type
@@ -320,6 +378,40 @@ Protocol_Status_t Protocol_SendSystemInfo(void);
  * @retval Protocol_Status_t Send status
  */
 Protocol_Status_t Protocol_SendDebugMessage(const char* message);
+
+/**
+ * @brief Send game control command
+ * @param action Game control action
+ * @retval Protocol_Status_t Send status
+ */
+Protocol_Status_t Protocol_SendGameControl(Game_Control_Action_t action);
+
+/**
+ * @brief Send mode select command
+ * @param mode Game mode
+ * @param time_limit Time limit in seconds (for timed mode)
+ * @retval Protocol_Status_t Send status
+ */
+Protocol_Status_t Protocol_SendModeSelect(Game_Mode_t mode, uint16_t time_limit);
+
+/**
+ * @brief Send score update
+ * @param black_score Black score
+ * @param white_score White score
+ * @param total_score Total cumulative score
+ * @param game_result Game result
+ * @retval Protocol_Status_t Send status
+ */
+Protocol_Status_t Protocol_SendScoreUpdate(uint8_t black_score, uint8_t white_score,
+                                          uint16_t total_score, uint8_t game_result);
+
+/**
+ * @brief Send timer update
+ * @param remaining_time Remaining time in seconds
+ * @param timer_state Timer state
+ * @retval Protocol_Status_t Send status
+ */
+Protocol_Status_t Protocol_SendTimerUpdate(uint16_t remaining_time, uint8_t timer_state);
 
 /**
  * @brief UART RX interrupt callback (call from HAL_UART_RxCpltCallback)
