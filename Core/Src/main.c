@@ -27,6 +27,7 @@
 #include "keypad_mapping.h"
 #include "uart_protocol.h"
 #include "othello_engine.h"
+#include "game_control.h"
 #include "debug_print.h"
 /* USER CODE END Includes */
 
@@ -467,6 +468,13 @@ void App_Init(void)
   /* Initialize game statistics */
   memset(&game_stats, 0, sizeof(GameStats_t));
 
+  /* Initialize game control module */
+  if (Game_Control_Init() != GAME_CTRL_OK) {
+    DEBUG_ERROR("[INIT] Game Control...FAILED\r\n");
+    Error_Handler();
+  }
+  DEBUG_INFO("[INIT] Game Control...OK\r\n");
+
   /* Start new game */
   if (Othello_NewGame(&game_state) == OTHELLO_OK) {
     game_initialized = true;
@@ -582,18 +590,25 @@ void App_ProcessKeyEvent(Key_t* key_event)
 
   /* Handle key press */
   if (key_event->state == KEY_PRESSED) {
+    // First, try to handle as game control key
+    if (Game_Control_HandleKey(logical_key, &game_state)) {
+      DEBUG_INFO("[APP] Game control key handled: %d\r\n", logical_key);
+      App_DisplayGameBoard();
+      Send_GameState_Via_Protocol(&game_state);
+      return;  // Key was handled by game control
+    }
+
+    // Check if game is in playing state before processing game keys
+    if (!GAME_CTRL_IS_PLAYING(Game_Control_GetContext())) {
+      DEBUG_INFO("[APP] Game not in PLAYING state, ignoring key\r\n");
+      return;
+    }
+
     switch (logical_key) {
       // === Core Function Keys ===
 
-      case KEYPAD_KEY_1: // New Game
-        DEBUG_INFO("[APP] New Game\r\n");
-        if (Othello_UpdateStats(&game_stats, &game_state) == OTHELLO_OK) {
-          Othello_NewGame(&game_state);
-          cursor_row = 3;  // Reset cursor to center
-          cursor_col = 3;
-          cursor_visible = true;
-          App_DisplayGameBoard();
-        }
+      case KEYPAD_KEY_1: // Start Game (handled by game control above)
+        // This case is now handled by Game_Control_HandleKey
         break;
 
       case KEYPAD_KEY_2: // Move Up
@@ -965,6 +980,27 @@ void Protocol_Command_Handler(Protocol_Command_t cmd, uint8_t* data, uint8_t len
     case CMD_BOARD_STATE:
       /* Send current game state */
       Send_GameState_Via_Protocol(&game_state);
+      break;
+
+    case CMD_GAME_CONTROL:
+      /* Handle game control commands */
+      if (len == sizeof(Game_Control_Data_t)) {
+        Game_Control_Data_t* ctrl_data = (Game_Control_Data_t*)data;
+        Game_Control_Status_t status = Game_Control_HandleAction(
+            (Game_Control_Action_t)ctrl_data->action, &game_state);
+
+        if (status == GAME_CTRL_OK) {
+          App_DisplayGameBoard();  // Update display
+          Protocol_SendAck(cmd, 0);  // Success
+          Send_GameState_Via_Protocol(&game_state);  // Send updated state
+        } else if (status == GAME_CTRL_INVALID_STATE) {
+          Protocol_SendAck(cmd, 1);  // Invalid state for this action
+        } else {
+          Protocol_SendAck(cmd, 2);  // Other error
+        }
+      } else {
+        Protocol_SendAck(cmd, 3);  // Invalid length
+      }
       break;
 
     default:
