@@ -17,6 +17,8 @@ import logging
 from gui.styles import DieterStyle, DieterWidgets, AppTheme
 from gui.game_board import GameBoard
 from gui.history_panel import HistoryPanel
+from gui.control_panel import ControlPanel
+from gui.serial_settings_dialog import SerialSettingsDialog
 from gui.analysis_window import AnalysisReportWindow
 from communication.serial_handler import SerialHandler
 from game.game_state import GameStateManager
@@ -47,6 +49,7 @@ class MainWindow:
         # UI组件
         self.game_board: Optional[GameBoard] = None
         self.history_panel: Optional[HistoryPanel] = None
+        self.control_panel: Optional[ControlPanel] = None
 
         # Connection verification
         self._connection_verified = False
@@ -115,6 +118,14 @@ class MainWindow:
         # === 右侧信息面板 ===
         right_frame = tk.Frame(main_container, bg=DieterStyle.COLORS['white'])
         right_frame.pack(side='right', fill='both', padx=(5, 10), pady=10)
+
+        # 游戏控制面板
+        self.control_panel = ControlPanel(
+            right_frame,
+            self.serial_handler,
+            on_state_change=self._on_game_control_state_changed
+        )
+        self.control_panel.pack(fill='x', pady=(0, 10))
 
         # 历史记录面板
         self.history_panel = HistoryPanel(
@@ -265,7 +276,7 @@ class MainWindow:
         connection_menu.add_command(label="连接STM32", command=self._connect_stm32)
         connection_menu.add_command(label="断开连接", command=self._disconnect_stm32)
         connection_menu.add_separator()
-        connection_menu.add_command(label="连接设置", command=self._connection_settings)
+        connection_menu.add_command(label="串口设置", command=self._serial_settings)
 
         # 分析菜单
         analysis_menu = tk.Menu(menubar, tearoff=0)
@@ -412,10 +423,14 @@ class MainWindow:
 
         self._update_ui_state()
 
-    def _connection_settings(self):
-        """连接设置对话框"""
-        # 这里可以实现连接设置对话框
-        messagebox.showinfo("功能开发中", "连接设置功能正在开发中...")
+    def _serial_settings(self):
+        """串口设置对话框"""
+        try:
+            dialog = SerialSettingsDialog(self.root, self.serial_handler, self.config)
+            self.root.wait_window(dialog)
+        except Exception as e:
+            self.logger.error(f"打开串口设置对话框失败: {e}")
+            messagebox.showerror("错误", f"打开串口设置对话框失败:\n{e}")
 
     def _deepseek_settings(self):
         """DeepSeek设置对话框"""
@@ -683,6 +698,11 @@ class MainWindow:
         except Exception as e:
             self.logger.error(f"处理游戏状态变化失败: {e}")
 
+    def _on_game_control_state_changed(self, new_state: str):
+        """游戏控制状态变化回调"""
+        self.logger.info(f"游戏控制状态变化: {new_state}")
+        # 可以在这里添加额外的状态变化处理逻辑
+
     def _on_game_ended(self):
         """游戏结束处理"""
         game_state = self.game_manager.current_game
@@ -757,7 +777,12 @@ class MainWindow:
     def _update_ui_state(self):
         """更新UI状态"""
         # 更新连接状态
-        self.update_connection_status(self.serial_handler.is_connected())
+        connected = self.serial_handler.is_connected()
+        self.update_connection_status(connected)
+
+        # 更新控制面板连接状态
+        if self.control_panel:
+            self.control_panel.set_connection_state(connected)
 
         # 更新历史面板的分析状态
         if self.history_panel:
