@@ -18,10 +18,16 @@ from gui.styles import DieterStyle, DieterWidgets, AppTheme
 from gui.game_board import GameBoard
 from gui.history_panel import HistoryPanel
 from gui.control_panel import ControlPanel
+from gui.score_panel import ScorePanel
 from gui.serial_settings_dialog import SerialSettingsDialog
+from gui.history_viewer import HistoryViewerWindow
+from gui.leaderboard_window import LeaderboardWindow
 from gui.analysis_window import AnalysisReportWindow
 from communication.serial_handler import SerialHandler
 from game.game_state import GameStateManager
+from game.score_manager import ScoreManager
+from game.leaderboard import Leaderboard
+from data.game_history import GameHistoryManager
 from analysis.deepseek_client import DeepSeekClient
 
 class MainWindow:
@@ -50,6 +56,16 @@ class MainWindow:
         self.game_board: Optional[GameBoard] = None
         self.history_panel: Optional[HistoryPanel] = None
         self.control_panel: Optional[ControlPanel] = None
+        self.score_panel: Optional[ScorePanel] = None
+
+        # 分数管理器
+        self.score_manager = ScoreManager()
+
+        # 历史记录管理器
+        self.history_manager = GameHistoryManager()
+
+        # 排行榜管理器
+        self.leaderboard = Leaderboard()
 
         # Connection verification
         self._connection_verified = False
@@ -126,6 +142,13 @@ class MainWindow:
             on_state_change=self._on_game_control_state_changed
         )
         self.control_panel.pack(fill='x', pady=(0, 10))
+
+        # 分数显示面板
+        self.score_panel = ScorePanel(
+            right_frame,
+            self.score_manager
+        )
+        self.score_panel.pack(fill='x', pady=(0, 10))
 
         # 历史记录面板
         self.history_panel = HistoryPanel(
@@ -264,6 +287,9 @@ class MainWindow:
         game_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="游戏", menu=game_menu)
         game_menu.add_command(label="新游戏", command=self._new_game)
+        game_menu.add_separator()
+        game_menu.add_command(label="历史回看", command=self._open_history_viewer)
+        game_menu.add_command(label="排行榜", command=self._open_leaderboard)
         game_menu.add_separator()
         game_menu.add_command(label="保存游戏", command=self._save_game)
         game_menu.add_command(label="加载游戏", command=self._load_game)
@@ -431,6 +457,22 @@ class MainWindow:
         except Exception as e:
             self.logger.error(f"打开串口设置对话框失败: {e}")
             messagebox.showerror("错误", f"打开串口设置对话框失败:\n{e}")
+
+    def _open_history_viewer(self):
+        """打开历史回看窗口"""
+        try:
+            viewer = HistoryViewerWindow(self.root, self.history_manager)
+        except Exception as e:
+            self.logger.error(f"打开历史回看窗口失败: {e}")
+            messagebox.showerror("错误", f"打开历史回看窗口失败:\n{e}")
+
+    def _open_leaderboard(self):
+        """打开排行榜窗口"""
+        try:
+            leaderboard_window = LeaderboardWindow(self.root, self.leaderboard)
+        except Exception as e:
+            self.logger.error(f"打开排行榜窗口失败: {e}")
+            messagebox.showerror("错误", f"打开排行榜窗口失败:\n{e}")
 
     def _deepseek_settings(self):
         """DeepSeek设置对话框"""
@@ -690,6 +732,15 @@ class MainWindow:
 
             # 更新状态显示面板
             self._update_status_display()
+
+            # 更新分数面板
+            if self.score_panel:
+                game_state = self.game_manager.current_game
+                self.score_panel.update_current_score(
+                    game_state.black_count,
+                    game_state.white_count,
+                    animate=True
+                )
 
             # 检查游戏结束
             if event == 'game_ended':
