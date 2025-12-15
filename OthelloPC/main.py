@@ -77,6 +77,8 @@ class OthelloPC:
 
             # 传递连接验证标志检查函数给主窗口
             self.main_window._connection_verified_flag = lambda: self._connection_verified
+            # 传递重置方法给主窗口
+            self.main_window._reset_connection_verification = self.reset_connection_verification
 
             # 设置退出处理
             self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -107,10 +109,28 @@ class OthelloPC:
                 if len(data) >= 2:
                     original_cmd = data[0]
                     status = data[1]
+
+                    # 命令名称映射
+                    cmd_names = {
+                        0x01: 'BOARD_STATE', 0x02: 'MAKE_MOVE', 0x03: 'GAME_CONFIG',
+                        0x04: 'GAME_STATS', 0x05: 'SYSTEM_INFO', 0x06: 'AI_REQUEST',
+                        0x07: 'HEARTBEAT', 0x0B: 'LED_CONTROL', 0x0C: 'GAME_CONTROL',
+                        0x0D: 'MODE_SELECT', 0x0E: 'SCORE_UPDATE', 0x0F: 'TIMER_UPDATE'
+                    }
+                    cmd_name = cmd_names.get(original_cmd, f'UNKNOWN(0x{original_cmd:02X})')
+
                     if status == 0:
-                        self.logger.info(f"命令 0x{original_cmd:02X} 执行成功")
+                        self.logger.info(f"✅ 命令执行成功: {cmd_name} (0x{original_cmd:02X})")
                     else:
-                        self.logger.warning(f"命令 0x{original_cmd:02X} 执行失败，状态码: {status}")
+                        # 状态码详细说明
+                        status_meanings = {
+                            1: '无效走法(invalid move) - 位置不合法或无法翻转',
+                            2: '走法失败(move failed) - 未翻转任何棋子',
+                            3: '数据长度错误(invalid length) - 数据包大小不匹配',
+                            4: '无效状态(invalid state) - 当前游戏状态不允许此操作'
+                        }
+                        status_msg = status_meanings.get(status, f'未知错误码: {status}')
+                        self.logger.warning(f"❌ 命令执行失败: {cmd_name} (0x{original_cmd:02X}), 状态码: {status}\n   原因: {status_msg}")
                 else:
                     self.logger.warning("收到格式错误的ACK响应")
 
@@ -158,6 +178,11 @@ class OthelloPC:
             self.logger.error(f"处理串口数据失败: {e}")
             import traceback
             traceback.print_exc()
+
+    def reset_connection_verification(self):
+        """重置连接验证标志"""
+        self._connection_verified = False
+        self.logger.debug("连接验证标志已重置")
 
     def on_closing(self):
         """应用程序关闭处理"""

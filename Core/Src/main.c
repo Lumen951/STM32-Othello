@@ -1075,6 +1075,21 @@ void Protocol_Command_Handler(Protocol_Command_t cmd, uint8_t* data, uint8_t len
       }
       break;
 
+    case CMD_TIMER_UPDATE:
+      /* Handle timer update from PC (timed mode) */
+      if (len >= 2) {
+        // Extract remaining time (2 bytes, big-endian)
+        uint16_t remaining_time = (data[0] << 8) | data[1];
+
+        // Optional: Display time on LED matrix if needed
+        // For now, just acknowledge receipt
+        DEBUG_INFO("[TIMER] Remaining: %d seconds\r\n", remaining_time);
+        Protocol_SendAck(cmd, 0);  // Success
+      } else {
+        Protocol_SendAck(cmd, 1);  // Invalid length
+      }
+      break;
+
     default:
       /* Unknown command */
       Protocol_SendError(1, (uint8_t*)&cmd, 1);

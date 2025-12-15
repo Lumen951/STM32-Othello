@@ -19,6 +19,7 @@ from gui.game_board import GameBoard
 from gui.history_panel import HistoryPanel
 from gui.control_panel import ControlPanel
 from gui.score_panel import ScorePanel
+from gui.timer_display import TimerDisplay
 from gui.serial_settings_dialog import SerialSettingsDialog
 from gui.history_viewer import HistoryViewerWindow
 from gui.leaderboard_window import LeaderboardWindow
@@ -28,6 +29,7 @@ from game.game_state import GameStateManager, PieceType
 from game.score_manager import ScoreManager
 from game.leaderboard import Leaderboard
 from game.challenge_mode import ChallengeMode
+from game.timed_mode import TimedModeManager
 from game.simple_ai import AIPlayer
 from data.game_history import GameHistoryManager
 from analysis.deepseek_client import DeepSeekClient
@@ -59,6 +61,7 @@ class MainWindow:
         self.history_panel: Optional[HistoryPanel] = None
         self.control_panel: Optional[ControlPanel] = None
         self.score_panel: Optional[ScorePanel] = None
+        self.timer_display: Optional[TimerDisplay] = None
 
         # 分数管理器
         self.score_manager = ScoreManager()
@@ -71,6 +74,11 @@ class MainWindow:
 
         # 闯关模式管理器
         self.challenge_mode = ChallengeMode()
+
+        # 计时模式管理器（传递root用于after调度）
+        self.timed_mode = TimedModeManager(self.root, duration=180)  # 默认3分钟
+        self.timed_mode.on_time_update = self._on_timer_update
+        self.timed_mode.on_time_up = self._on_time_up
 
         # AI玩家（对抗模式）
         self.ai_player = None
@@ -127,13 +135,21 @@ class MainWindow:
         # === 状态显示面板（棋盘格样式）===
         self._create_status_grid(left_frame)
 
-        # 游戏棋盘
+        # 创建棋盘容器（水平布局：计时器在左，棋盘在右）
+        board_container = tk.Frame(left_frame, bg=DieterStyle.COLORS['white'])
+        board_container.pack(pady=10)
+
+        # 游戏棋盘（先放入，side='right'，在右侧）
         self.game_board = GameBoard(
-            left_frame,
+            board_container,
             self.game_manager.current_game,
             on_move_callback=self._on_player_move
         )
-        self.game_board.pack(pady=10)
+        self.game_board.pack(side='right')
+
+        # 计时显示组件（后放入，side='left'，在左侧，初始隐藏）
+        self.timer_display = TimerDisplay(board_container, self.timed_mode)
+        # 初始不pack，通过show()/hide()控制显示
 
         # === 右侧信息面板 ===
         right_frame = tk.Frame(main_container, bg=DieterStyle.COLORS['white'])
@@ -375,6 +391,11 @@ class MainWindow:
             # 显示"连接中"状态
             self.update_connection_status('connecting')
 
+            # 重置连接验证标志和计数器（确保每次连接都是全新状态）
+            if hasattr(self, '_reset_connection_verification'):
+                self._reset_connection_verification()
+            self._connection_timeout_count = 0
+
             # 优先尝试连接COM7，如果失败则尝试其他端口
             port_to_use = 'COM7'
             if self.config and hasattr(self.config, 'serial_port'):
@@ -431,6 +452,10 @@ class MainWindow:
         if self._connection_timeout_count > 6:
             self.logger.warning("STM32连接验证超时")
 
+            # 重置连接验证标志（重要！避免下次连接时误判）
+            if hasattr(self, '_reset_connection_verification'):
+                self._reset_connection_verification()
+
             # 断开串口连接
             self.serial_handler.disconnect()
 
@@ -460,10 +485,15 @@ class MainWindow:
             self.serial_handler.disconnect()
             self.logger.info("STM32连接已断开")
 
+            # 重置连接验证标志
+            if hasattr(self, '_reset_connection_verification'):
+                self._reset_connection_verification()
+
+            # 更新为未连接状态
+            self.update_connection_status('disconnected')
+
         except Exception as e:
             self.logger.error(f"断开STM32连接失败: {e}")
-
-        self._update_ui_state()
 
     def _serial_settings(self):
         """串口设置对话框"""
@@ -719,6 +749,15 @@ class MainWindow:
     def _on_player_move(self, row: int, col: int):
         """处理玩家走棋"""
         try:
+            # 在走棋前保存当前玩家（走棋后会切换）
+            current_player = self.game_manager.current_game.current_player.value
+
+            # 验证走法是否有效（与STM32端逻辑一致）
+            game_state = self.game_manager.current_game
+            if not game_state.is_valid_move(row, col, game_state.current_player):
+                self.logger.warning(f"无效走法: ({row},{col}) 玩家={current_player}, 不发送到STM32")
+                return
+
             success = self.game_manager.make_move(row, col)
 
             if success:
@@ -727,12 +766,12 @@ class MainWindow:
                     self.game_board.update_board()
                     self.game_board.highlight_last_move()
 
-                # 发送走法到STM32
+                # 发送走法到STM32（使用走棋前的玩家）
                 if self.serial_handler.is_connected():
-                    player = self.game_manager.current_game.current_player.value
-                    self.serial_handler.send_make_move(row, col, player)
-
-                self.logger.info(f"玩家走棋: {chr(ord('A') + col)}{row + 1}")
+                    self.serial_handler.send_make_move(row, col, current_player)
+                    self.logger.info(f"玩家走棋: {chr(ord('A') + col)}{row + 1}, 已发送到STM32")
+                else:
+                    self.logger.info(f"玩家走棋: {chr(ord('A') + col)}{row + 1}, STM32未连接")
 
                 # 对抗模式：玩家走棋后，AI自动走棋
                 if self.is_vs_ai_mode and self.ai_player:
@@ -763,6 +802,9 @@ class MainWindow:
                 row, col = move
                 self.logger.info(f"AI走棋: {chr(ord('A') + col)}{row + 1}")
 
+                # 保存AI的玩家类型（在make_move前）
+                ai_player_value = self.ai_player.player_type.value
+
                 # 执行走法
                 success = self.game_manager.make_move(row, col)
 
@@ -772,10 +814,9 @@ class MainWindow:
                         self.game_board.update_board()
                         self.game_board.highlight_last_move()
 
-                    # 发送走法到STM32
+                    # 发送走法到STM32（使用AI的玩家类型）
                     if self.serial_handler.is_connected():
-                        player = self.ai_player.player_type.value
-                        self.serial_handler.send_make_move(row, col, player)
+                        self.serial_handler.send_make_move(row, col, ai_player_value)
             else:
                 # AI无可用走法，跳过
                 self.logger.info("AI无可用走法，跳过")
@@ -827,26 +868,59 @@ class MainWindow:
             if self.game_board:
                 self.game_board.set_interactive(True)
 
+            # 重置计时器（如果是计时模式）
+            if self.timer_display and self.timer_display.winfo_ismapped():
+                self.timed_mode.reset()
+                self.timer_display.reset_display()
+
         # 根据状态控制棋盘交互性
         elif new_state == 'idle':
             # 空闲状态：禁用棋盘
             if self.game_board:
                 self.game_board.set_interactive(False)
 
+            # 停止并重置计时器
+            if self.timed_mode.is_running():
+                self.timed_mode.stop()
+            self.timed_mode.reset()
+            if self.timer_display:
+                self.timer_display.reset_display()
+
         elif new_state == 'playing':
             # 游戏进行中：启用棋盘
             if self.game_board:
                 self.game_board.set_interactive(True)
+
+            # 如果计时器可见（计时模式），启动计时
+            if self.timer_display and self.timer_display.winfo_ismapped():
+                self.timed_mode.start()
 
         elif new_state == 'paused':
             # 暂停状态：禁用棋盘
             if self.game_board:
                 self.game_board.set_interactive(False)
 
+            # 暂停计时器
+            if self.timed_mode.is_running():
+                self.timed_mode.pause()
+
+        elif new_state == 'resumed':
+            # 继续状态：启用棋盘
+            if self.game_board:
+                self.game_board.set_interactive(True)
+
+            # 继续计时器
+            if self.timed_mode.is_paused():
+                self.timed_mode.resume()
+
         elif new_state == 'ended':
-            # 结束状态：禁用棋盘并弹出分析提示
+            # 结束状态：禁用棋盘
             if self.game_board:
                 self.game_board.set_interactive(False)
+
+            # 停止计时器
+            if self.timed_mode.is_running():
+                self.timed_mode.stop()
 
             # 弹出DeepSeek分析提示
             game_state = self.game_manager.current_game
@@ -879,6 +953,14 @@ class MainWindow:
             self.is_vs_ai_mode = False
             self.ai_player = None
 
+            # 隐藏计时器
+            if self.timer_display:
+                self.timer_display.hide()
+
+            # 停止计时
+            if self.timed_mode.is_running():
+                self.timed_mode.stop()
+
             self.logger.info("对抗模式已启动（双人对战）")
             messagebox.showinfo(
                 "对抗模式",
@@ -892,6 +974,14 @@ class MainWindow:
         elif mode == SerialProtocol.GAME_MODE_CHALLENGE:
             # 启动闯关模式（人机对抗）
             self.is_vs_ai_mode = True
+
+            # 隐藏计时器
+            if self.timer_display:
+                self.timer_display.hide()
+
+            # 停止计时
+            if self.timed_mode.is_running():
+                self.timed_mode.stop()
 
             # 获取AI难度
             difficulty = self.control_panel.get_ai_difficulty()
@@ -924,6 +1014,14 @@ class MainWindow:
             self.is_vs_ai_mode = False
             self.ai_player = None
 
+            # 隐藏计时器
+            if self.timer_display:
+                self.timer_display.hide()
+
+            # 停止计时
+            if self.timed_mode.is_running():
+                self.timed_mode.stop()
+
             # 结束闯关模式（如果正在进行）
             if self.challenge_mode.is_active:
                 self.challenge_mode.end_challenge()
@@ -934,12 +1032,40 @@ class MainWindow:
                 self.score_panel.show_challenge_mode(False)
 
         elif mode == SerialProtocol.GAME_MODE_TIMED:
-            # 结束AI模式
+            # 结束AI模式和闯关模式
             self.is_vs_ai_mode = False
             self.ai_player = None
 
-            # 计时模式（未实现）
-            self.logger.info("计时模式尚未实现")
+            if self.challenge_mode.is_active:
+                self.challenge_mode.end_challenge()
+                if self.score_panel:
+                    self.score_panel.show_challenge_mode(False)
+
+            # 启动计时模式
+            self.logger.info("计时模式已启动")
+
+            # 显示计时器
+            if self.timer_display:
+                self.timer_display.show()
+                self.timer_display.reset_display()
+
+            # 显示提示
+            messagebox.showinfo(
+                "计时模式",
+                f"计时模式已启动！\n\n"
+                f"时长：{self.timed_mode.get_duration() // 60} 分钟\n"
+                f"目标：在规定时间内尽可能多得分\n\n"
+                f"时间到将自动结束游戏！"
+            )
+
+        else:
+            # 其他模式：隐藏计时器
+            if self.timer_display:
+                self.timer_display.hide()
+
+            # 停止计时
+            if self.timed_mode.is_running():
+                self.timed_mode.stop()
 
     def _on_game_ended(self):
         """游戏结束处理（普通模式）"""
@@ -1164,6 +1290,15 @@ class MainWindow:
         Args:
             status: 连接状态 ('disconnected', 'connecting', 'connected')
         """
+        # 调试日志：记录状态变化和调用栈
+        import traceback
+        caller_info = traceback.extract_stack(limit=3)[-2]
+        self.logger.info(f"🔄 连接状态变化: {getattr(self, '_current_connection_status', 'unknown')} → {status}")
+        self.logger.debug(f"   调用者: {caller_info.filename}:{caller_info.lineno} in {caller_info.name}")
+
+        # 保存当前状态到缓存
+        self._current_connection_status = status
+
         if status == 'connected':
             self.status_label.config(
                 text="已连接",
@@ -1175,6 +1310,7 @@ class MainWindow:
                 text="● 已连接",
                 fg=DieterStyle.COLORS['success_green']
             )
+            self.logger.info("✅ UI已更新为【已连接】状态")
         elif status == 'connecting':
             self.status_label.config(
                 text="连接中...",
@@ -1197,6 +1333,7 @@ class MainWindow:
                 text="● 未连接",
                 fg=DieterStyle.COLORS['error_red']
             )
+            self.logger.info("❌ UI已更新为【未连接】状态")
 
     def update_game_board(self):
         """更新游戏棋盘显示"""
@@ -1224,8 +1361,12 @@ class MainWindow:
             self.logger.error(f"更新系统信息失败: {e}")
 
     def _update_ui_state(self):
-        """更新UI状态"""
-        # 更新连接状态
+        """更新UI状态（仅在初始化时调用）
+
+        注意：此方法只应在初始化时调用一次，不应在运行时调用
+        运行时的状态更新应通过 update_connection_status() 显式调用
+        """
+        # 更新连接状态（初始化时使用）
         connected = self.serial_handler.is_connected()
         status = 'connected' if connected else 'disconnected'
         self.update_connection_status(status)
@@ -1237,3 +1378,47 @@ class MainWindow:
         # 更新历史面板的分析状态
         if self.history_panel:
             self.history_panel.set_analysis_status("", False)
+
+        self.logger.debug(f"_update_ui_state调用（初始化）: connected={connected}")
+
+    def _on_timer_update(self, remaining: int):
+        """计时器更新回调
+
+        Args:
+            remaining: 剩余时间（秒）
+        """
+        # 更新UI显示
+        if self.timer_display:
+            self.timer_display.update_time(remaining)
+
+        # 注意：不在倒计时过程中同步STM32，仅在时间结束时同步
+
+    def _on_time_up(self):
+        """时间到回调"""
+        self.logger.info("计时结束，游戏自动结束")
+
+        # 获取游戏状态
+        game_state = self.game_manager.current_game
+
+        # 显示提示并询问是否分析
+        result = messagebox.askyesno(
+            "⏰ 计时模式 - 时间到",
+            f"时间到！游戏自动结束\n\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"📊 最终得分\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"黑方（橙色）: {game_state.black_count}\n"
+            f"白方: {game_state.white_count}\n\n"
+            f"是否使用DeepSeek AI分析这局游戏？"
+        )
+
+        # 自动结束游戏
+        try:
+            from communication.serial_handler import SerialProtocol
+            self.serial_handler.send_game_control(SerialProtocol.GAME_CTRL_ACTION_END)
+        except Exception as e:
+            self.logger.error(f"自动结束游戏失败: {e}")
+
+        # 如果用户选择分析
+        if result:
+            self._request_analysis()

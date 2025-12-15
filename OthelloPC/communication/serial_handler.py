@@ -26,21 +26,23 @@ class SerialProtocol:
     PACKET_FOOTER = 0x03  # ETX
     MAX_DATA_LENGTH = 255
 
-    # 命令定义
+    # 命令定义 (必须与STM32端uart_protocol.h保持一致)
     CMD_BOARD_STATE = 0x01      # 棋盘状态同步
     CMD_MAKE_MOVE = 0x02        # 走子命令
-    CMD_NEW_GAME = 0x03         # 新游戏命令
-    CMD_GAME_OVER = 0x04        # 游戏结束
+    CMD_GAME_CONFIG = 0x03      # 游戏配置/新游戏
+    CMD_GAME_STATS = 0x04       # 游戏统计
     CMD_SYSTEM_INFO = 0x05      # 系统信息查询
     CMD_AI_REQUEST = 0x06       # AI走法请求
     CMD_HEARTBEAT = 0x07        # 心跳包
-    CMD_CONFIG_SET = 0x08       # 配置设置
-    CMD_CONFIG_GET = 0x09       # 配置获取
+    CMD_ACK = 0x08              # 命令确认
+    CMD_DEBUG_INFO = 0x09       # 调试信息
     CMD_KEY_EVENT = 0x0A        # 按键事件
+    CMD_LED_CONTROL = 0x0B      # LED控制
     CMD_GAME_CONTROL = 0x0C     # 游戏控制
     CMD_MODE_SELECT = 0x0D      # 模式选择
     CMD_SCORE_UPDATE = 0x0E     # 分数更新
     CMD_TIMER_UPDATE = 0x0F     # 计时器更新
+    CMD_ERROR = 0xFF            # 错误响应
 
     # 游戏控制动作
     GAME_ACTION_START = 0x01    # 开始游戏
@@ -274,6 +276,21 @@ class SerialHandler:
         """
         try:
             packet = SerialProtocol.create_packet(command, data)
+
+            # 详细日志 - 命令名称映射
+            cmd_name = {
+                0x01: 'BOARD_STATE', 0x02: 'MAKE_MOVE', 0x03: 'GAME_CONFIG',
+                0x04: 'GAME_STATS', 0x05: 'SYSTEM_INFO', 0x06: 'AI_REQUEST',
+                0x07: 'HEARTBEAT', 0x08: 'ACK', 0x09: 'DEBUG_INFO',
+                0x0A: 'KEY_EVENT', 0x0B: 'LED_CONTROL', 0x0C: 'GAME_CONTROL',
+                0x0D: 'MODE_SELECT', 0x0E: 'SCORE_UPDATE', 0x0F: 'TIMER_UPDATE',
+                0xFF: 'ERROR'
+            }.get(command, f'UNKNOWN({command:02X})')
+
+            self.logger.info(f"📤 发送命令: {cmd_name} (0x{command:02X}), 数据长度: {len(data)}")
+            if len(data) > 0 and len(data) <= 16:
+                self.logger.debug(f"   数据内容: {data.hex(' ')}")
+
             self.send_queue.put(packet, timeout=1.0)
             return True
         except Exception as e:
@@ -289,12 +306,15 @@ class SerialHandler:
 
     def send_make_move(self, row: int, col: int, player: int) -> bool:
         """发送走棋命令"""
-        data = struct.pack('BBB', row, col, player)
+        timestamp = int(time.time() * 1000) & 0xFFFFFFFF  # 毫秒级时间戳，4字节
+        # 使用BBBxI格式确保8字节对齐（x表示1字节padding）
+        # 对应C结构体: uint8_t[3] + padding[1] + uint32_t[4] = 8字节
+        data = struct.pack('<BBBxI', row, col, player, timestamp)
         return self.send_command(SerialProtocol.CMD_MAKE_MOVE, data)
 
     def send_new_game(self) -> bool:
         """发送新游戏命令"""
-        return self.send_command(SerialProtocol.CMD_NEW_GAME)
+        return self.send_command(SerialProtocol.CMD_GAME_CONFIG)
 
     def send_ai_request(self, difficulty: int = 1) -> bool:
         """请求AI走法"""
@@ -313,14 +333,6 @@ class SerialHandler:
         """请求系统信息"""
         return self.send_command(SerialProtocol.CMD_SYSTEM_INFO)
 
-    def send_config_set(self, config_data: bytes) -> bool:
-        """设置配置"""
-        return self.send_command(SerialProtocol.CMD_CONFIG_SET, config_data)
-
-    def send_config_get(self) -> bool:
-        """获取配置"""
-        return self.send_command(SerialProtocol.CMD_CONFIG_GET)
-
     def send_game_control(self, action: int) -> bool:
         """
         发送游戏控制命令
@@ -332,7 +344,9 @@ class SerialHandler:
             bool: 发送是否成功
         """
         timestamp = int(time.time() * 1000) & 0xFFFFFFFF
-        data = struct.pack('<BI', action, timestamp)
+        # 使用BxxxI格式确保8字节对齐（xxx表示3字节padding）
+        # 对应C结构体: uint8_t + padding[3] + uint32_t[4] = 8字节
+        data = struct.pack('<BxxxI', action, timestamp)
         return self.send_command(SerialProtocol.CMD_GAME_CONTROL, data)
 
     def send_game_start(self) -> bool:
@@ -464,9 +478,17 @@ class SerialHandler:
                 packet = self.send_queue.get(timeout=1.0)
 
                 if self.serial_port and self.serial_port.is_open:
+                    # 添加详细的十六进制日志
+                    self.logger.debug(f"发送数据包 ({len(packet)}字节): {packet.hex(' ')}")
+
                     self.serial_port.write(packet)
                     self.serial_port.flush()
                     self.stats['packets_sent'] += 1
+
+                    # 发送成功日志
+                    cmd_byte = packet[1] if len(packet) > 1 else 0
+                    len_byte = packet[2] if len(packet) > 2 else 0
+                    self.logger.info(f"✅ 发送成功 - 命令: 0x{cmd_byte:02X}, 数据长度: {len_byte}")
                 else:
                     self.logger.warning("串口未连接，丢弃数据包")
 
