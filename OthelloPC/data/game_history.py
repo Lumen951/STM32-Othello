@@ -56,7 +56,14 @@ class GameHistoryRecord:
             'draw': '平局'
         }.get(self.winner, '未知')
 
-        return f"{self.date_str} | {winner_text} | {self.black_count}-{self.white_count} | {self.move_count}手"
+        # 游戏模式标识
+        mode_icon = {
+            'normal': '🎮',
+            'challenge': '🎯',
+            'timed': '⏱️'
+        }.get(self.game_mode, '🎮')
+
+        return f"{mode_icon} {self.date_str} | {winner_text} | {self.black_count}-{self.white_count} | {self.move_count}手"
 
 
 class GameHistoryManager:
@@ -76,12 +83,13 @@ class GameHistoryManager:
         # 加载历史记录
         self._load_history()
 
-    def add_game(self, game_state) -> GameHistoryRecord:
+    def add_game(self, game_state, game_mode: str = 'normal') -> GameHistoryRecord:
         """
         添加游戏记录
 
         Args:
             game_state: 游戏状态对象
+            game_mode: 游戏模式 ('normal', 'challenge', 'timed')
 
         Returns:
             GameHistoryRecord: 历史记录对象
@@ -103,7 +111,7 @@ class GameHistoryManager:
         game_data['timestamp'] = datetime.now().timestamp()
         game_data['winner'] = winner
         game_data['duration'] = game_state.get_game_duration()
-        game_data['game_mode'] = 'normal'  # 可以从外部传入
+        game_data['game_mode'] = game_mode  # 使用传入的游戏模式
 
         # 创建记录
         record = GameHistoryRecord(game_data)

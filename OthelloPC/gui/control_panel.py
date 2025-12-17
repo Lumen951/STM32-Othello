@@ -89,7 +89,7 @@ class ControlPanel(tk.Frame):
         )
         self.resume_btn.pack(side='left', fill='x', expand=True)
 
-        # 第二行：结束、重置
+        # 第二行：结束、重置、刷新同步
         row2 = tk.Frame(control_frame, bg=DieterStyle.COLORS['board_bg'])
         row2.pack(fill='x')
 
@@ -101,7 +101,13 @@ class ControlPanel(tk.Frame):
         self.reset_btn = DieterWidgets.create_button(
             row2, "🔄 重置", self._on_reset, 'secondary'
         )
-        self.reset_btn.pack(side='left', fill='x', expand=True)
+        self.reset_btn.pack(side='left', padx=(0, 5), fill='x', expand=True)
+
+        # === 新增：刷新同步按钮 ===
+        self.sync_btn = DieterWidgets.create_button(
+            row2, "🔄 刷新同步", self._on_sync, 'secondary'
+        )
+        self.sync_btn.pack(side='left', fill='x', expand=True)
 
         # === 分隔线 ===
         separator = tk.Frame(main_container, height=2, bg=DieterStyle.COLORS['gray_light'])
@@ -125,7 +131,7 @@ class ControlPanel(tk.Frame):
         self.mode_combo = ttk.Combobox(
             mode_frame,
             textvariable=self.mode_var,
-            values=["普通模式", "对抗模式", "闯关模式", "计时模式"],
+            values=["普通模式", "作弊模式", "闯关模式", "计时模式"],
             state='readonly',
             width=12,
             font=('Arial', 10)
@@ -133,7 +139,7 @@ class ControlPanel(tk.Frame):
         self.mode_combo.pack(side='left', fill='x', expand=True)
         self.mode_combo.bind('<<ComboboxSelected>>', self._on_mode_changed)
 
-        # === AI难度选择（仅对抗模式可见）===
+        # === AI难度选择（仅闯关模式可见）===
         self.ai_difficulty_frame = tk.Frame(main_container, bg=DieterStyle.COLORS['board_bg'])
         self.ai_difficulty_frame.pack(fill='x', padx=10, pady=5)
         self.ai_difficulty_frame.pack_forget()  # 初始隐藏
@@ -267,6 +273,22 @@ class ControlPanel(tk.Frame):
             # 未连接时也可以重置（仅上位机）
             self._set_state('idle')
 
+    def _on_sync(self):
+        """手动同步上位机状态到下位机"""
+        self.logger.info("请求手动同步游戏状态到STM32")
+
+        if not self.serial_handler.is_connected():
+            from tkinter import messagebox
+            messagebox.showwarning(
+                "同步失败",
+                "未连接到STM32设备\n\n请先连接设备后再尝试同步"
+            )
+            return
+
+        # 触发主窗口执行同步
+        if self.on_state_change:
+            self.on_state_change('sync_to_stm32')
+
     def _on_mode_changed(self, event=None):
         """模式选择变化"""
         mode_name = self.mode_var.get()
@@ -274,7 +296,7 @@ class ControlPanel(tk.Frame):
         # 映射模式名称到协议常量
         mode_map = {
             "普通模式": SerialProtocol.GAME_MODE_NORMAL,
-            "对抗模式": 0x04,  # 对抗模式（双人对战）
+            "作弊模式": 0x04,  # 作弊模式（上位机棋盘编辑，不发送到STM32）
             "闯关模式": SerialProtocol.GAME_MODE_CHALLENGE,
             "计时模式": SerialProtocol.GAME_MODE_TIMED
         }
@@ -291,9 +313,9 @@ class ControlPanel(tk.Frame):
         if self.on_mode_change:
             self.on_mode_change(self.current_mode)
 
-        # 对抗模式不需要发送到STM32（仅上位机双人对战）
-        if mode_name == "对抗模式":
-            self.logger.info("切换到对抗模式（双人对战）")
+        # 作弊模式不需要发送到STM32（仅上位机棋盘编辑功能）
+        if mode_name == "作弊模式":
+            self.logger.info("切换到作弊模式（棋盘编辑）")
             return
 
         if not self.serial_handler.is_connected():

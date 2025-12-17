@@ -143,10 +143,10 @@ class HistoryViewerWindow(tk.Toplevel):
         self.game_board = GameBoard(
             right_frame,
             temp_state,
-            on_move_callback=None,
-            interactive=False
+            on_move_callback=None
         )
         self.game_board.pack(pady=10)
+        self.game_board.set_interactive(False)  # 禁用交互（只读模式）
 
         # 回放控制面板
         control_frame = tk.Frame(right_frame, bg=DieterStyle.COLORS['board_bg'],
@@ -356,10 +356,15 @@ class HistoryViewerWindow(tk.Toplevel):
         current, total = self.replay_manager.get_progress()
         self.progress_label.config(text=f"{current} / {total}")
 
-        # 更新进度条
+        # 更新进度条（防止触发 command 回调）
         if total > 0:
             progress = (current / total) * 100
+
+            # 【关键修复】暂时移除 command 回调，避免循环触发
+            old_command = self.progress_scale.cget('command')
+            self.progress_scale.config(command='')
             self.progress_scale.set(progress)
+            self.progress_scale.config(command=old_command)
 
         # 更新按钮状态
         has_data = self.replay_manager.game_data is not None

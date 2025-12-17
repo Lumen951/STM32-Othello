@@ -14,6 +14,10 @@ import time
 from datetime import datetime
 from enum import Enum
 from typing import List, Dict, Optional, Tuple
+import logging
+
+# 创建模块级logger
+logger = logging.getLogger(__name__)
 
 class PieceType(Enum):
     """棋子类型枚举"""
@@ -288,19 +292,60 @@ class GameStateManager:
         return False
 
     def update_board_state(self, board_data: bytes):
-        """从STM32更新棋盘状态"""
-        # 解析STM32发送的棋盘数据
-        # 假设数据格式: 64字节表示8x8棋盘状态
-        if len(board_data) >= 64:
+        """从STM32更新完整游戏状态"""
+        import struct
+
+        # 检查数据长度（Game_State_Data_t = 72 bytes）
+        if len(board_data) < 72:
+            logger.error(f"❌ 游戏状态数据不完整: 接收{len(board_data)}字节, 期望72字节")
+            return
+
+        try:
+            # ========== 1. 解析棋盘数据 (0-63字节) ==========
             for i in range(64):
                 row = i // 8
                 col = i % 8
                 piece_value = board_data[i]
                 self.current_game.board[row][col] = PieceType(piece_value)
 
-            # 更新计数
-            self.current_game._update_piece_counts()
+            # ========== 2. 解析当前玩家 (64字节) ⚠️ 关键修复 ==========
+            current_player_value = board_data[64]
+            old_player = self.current_game.current_player
+            self.current_game.current_player = PieceType(current_player_value)
+
+            # ========== 3. 解析棋子计数 (65-66字节) ==========
+            self.current_game.black_count = board_data[65]
+            self.current_game.white_count = board_data[66]
+
+            # ========== 4. 解析游戏结束标志 (67字节) ==========
+            game_over = board_data[67]
+            if game_over == 1:
+                # 根据分数判断结果
+                if self.current_game.black_count > self.current_game.white_count:
+                    self.current_game.status = GameStatus.BLACK_WIN
+                elif self.current_game.white_count > self.current_game.black_count:
+                    self.current_game.status = GameStatus.WHITE_WIN
+                else:
+                    self.current_game.status = GameStatus.DRAW
+            else:
+                self.current_game.status = GameStatus.PLAYING
+
+            # ========== 5. 解析走法计数 (68-71字节, little-endian uint32) ==========
+            move_count = struct.unpack('<I', board_data[68:72])[0]
+            self.current_game.move_count = move_count
+
+            # ========== 日志输出 ==========
+            logger.info(f"✅ 游戏状态同步: 玩家 {old_player.name}→{self.current_game.current_player.name}, "
+                       f"黑={self.current_game.black_count}, 白={self.current_game.white_count}, "
+                       f"步数={move_count}")
+
+            # ========== 通知观察者 ==========
             self._notify_observers('board_updated')
+
+        except Exception as e:
+            logger.error(f"❌ 解析游戏状态失败: {e}")
+            import traceback
+            traceback.print_exc()
 
     def get_game_pgn(self) -> str:
         """获取当前游戏的PGN格式棋谱"""

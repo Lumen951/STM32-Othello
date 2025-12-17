@@ -84,6 +84,9 @@ class MainWindow:
         self.ai_player = None
         self.is_vs_ai_mode = False
 
+        # 当前游戏模式标记（用于保存历史记录）
+        self._current_game_mode = 'normal'
+
         # Connection verification
         self._connection_verified = False
         self._connection_timeout_count = 0
@@ -356,6 +359,10 @@ class MainWindow:
         try:
             self.game_manager.start_new_game()
 
+            # 重置游戏模式标记为普通模式（除非之后被其他模式覆盖）
+            if not self.challenge_mode.is_active and not (self.timer_display and self.timer_display.winfo_ismapped()):
+                self._current_game_mode = 'normal'
+
             # 更新棋盘显示
             if self.game_board:
                 self.game_board.game_state = self.game_manager.current_game
@@ -369,7 +376,7 @@ class MainWindow:
 
         except Exception as e:
             self.logger.error(f"开始新游戏失败: {e}")
-            messagebox.showerror("错误", f"开始新游戏时发生错误:\\n{e}")
+            messagebox.showerror("错误", f"开始新游戏时发生错误:\n{e}")
 
     def _toggle_connection(self):
         """切换STM32连接状态"""
@@ -776,7 +783,7 @@ class MainWindow:
                 # 对抗模式：玩家走棋后，AI自动走棋
                 if self.is_vs_ai_mode and self.ai_player:
                     # 延迟500ms后AI走棋（让玩家看到自己的走法）
-                    self.root.after(500, self._ai_make_move)
+                    self.root.after(1500, self._ai_make_move)
             else:
                 self.logger.warning("无效走法")
 
@@ -854,6 +861,25 @@ class MainWindow:
                     # 普通模式：调用原有的游戏结束处理
                     self._on_game_ended()
 
+            # ========== 新增：检查是否需要AI响应 ==========
+            elif event == 'board_updated':
+                # 如果是闯关模式（人机对战）
+                if self.is_vs_ai_mode and self.ai_player:
+                    game_state = self.game_manager.current_game
+
+                    # 检查游戏是否还在进行中
+                    if game_state.status.value == 0:  # PLAYING
+                        # 检查是否轮到AI
+                        if game_state.current_player == self.ai_player.player_type:
+                            # 延迟后让AI走棋（给用户反应时间）
+                            if self.serial_handler.is_connected():
+                                delay_ms = 1500  # 连接STM32时延迟1.5秒
+                            else:
+                                delay_ms = 800   # 未连接时延迟0.8秒
+
+                            self.logger.info(f"检测到轮到AI（{self.ai_player.player_type.name}），将在{delay_ms}ms后走棋")
+                            self.root.after(delay_ms, self._ai_make_move)
+
         except Exception as e:
             self.logger.error(f"处理游戏状态变化失败: {e}")
 
@@ -922,8 +948,18 @@ class MainWindow:
             if self.timed_mode.is_running():
                 self.timed_mode.stop()
 
-            # 弹出DeepSeek分析提示
+            # 获取游戏状态
             game_state = self.game_manager.current_game
+
+            # 确定当前游戏模式（使用模式标记）
+            current_game_mode = self._current_game_mode
+
+            # 自动保存游戏到历史记录
+            try:
+                record = self.history_manager.add_game(game_state, game_mode=current_game_mode)
+                self.logger.info(f"手动结束游戏已保存到历史记录: {record.game_id} (模式: {current_game_mode})")
+            except Exception as e:
+                self.logger.error(f"保存手动结束游戏历史失败: {e}")
 
             # 确定胜负
             if game_state.status.value == 1:  # BLACK_WIN
@@ -936,11 +972,15 @@ class MainWindow:
             # 显示游戏结果并询问是否分析
             result = messagebox.askyesno(
                 "游戏结束",
-                f"{winner}\n\n是否使用DeepSeek AI分析这局游戏？"
+                f"{winner}\n\n游戏已自动保存到历史记录。\n\n是否使用DeepSeek AI分析这局游戏？"
             )
 
             if result:
                 self._request_analysis()
+
+        # === 新增：处理手动同步请求 ===
+        elif new_state == 'sync_to_stm32':
+            self._sync_state_to_stm32()
 
     def _on_game_mode_changed(self, mode: int):
         """游戏模式变化回调"""
@@ -948,8 +988,8 @@ class MainWindow:
 
         self.logger.info(f"游戏模式变化: 0x{mode:02X}")
 
-        if mode == 0x04:  # 对抗模式（双人对战）
-            # 结束AI模式
+        if mode == 0x04:  # 作弊模式（棋盘编辑）
+            # 结束AI模式和计时模式
             self.is_vs_ai_mode = False
             self.ai_player = None
 
@@ -961,19 +1001,19 @@ class MainWindow:
             if self.timed_mode.is_running():
                 self.timed_mode.stop()
 
-            self.logger.info("对抗模式已启动（双人对战）")
+            self.logger.info("作弊模式已启动（棋盘编辑）")
             messagebox.showinfo(
-                "对抗模式",
-                f"对抗模式已启动！\n\n"
-                f"双人对战模式\n"
-                f"玩家1执黑（橙色）\n"
-                f"玩家2执白\n\n"
-                f"轮流在棋盘上下棋，祝你们玩得愉快！"
+                "作弊模式",
+                f"作弊模式已启动！\n\n"
+                f"您可以自由编辑棋盘\n"
+                f"设置任意棋局进行练习\n\n"
+                f"注意：此模式不会记录到历史和排行榜"
             )
 
         elif mode == SerialProtocol.GAME_MODE_CHALLENGE:
             # 启动闯关模式（人机对抗）
             self.is_vs_ai_mode = True
+            self._current_game_mode = 'challenge'  # 设置游戏模式标记
 
             # 隐藏计时器
             if self.timer_display:
@@ -1043,6 +1083,7 @@ class MainWindow:
 
             # 启动计时模式
             self.logger.info("计时模式已启动")
+            self._current_game_mode = 'timed'  # 设置游戏模式标记
 
             # 显示计时器
             if self.timer_display:
@@ -1071,6 +1112,13 @@ class MainWindow:
         """游戏结束处理（普通模式）"""
         game_state = self.game_manager.current_game
 
+        # 自动保存游戏到历史记录
+        try:
+            record = self.history_manager.add_game(game_state, game_mode='normal')
+            self.logger.info(f"普通模式游戏已自动保存到历史记录: {record.game_id}")
+        except Exception as e:
+            self.logger.error(f"保存游戏历史失败: {e}")
+
         # 确定胜负
         if game_state.status.value == 1:  # BLACK_WIN
             winner = f"黑方（橙色）获胜 ({game_state.black_count}-{game_state.white_count})"
@@ -1082,7 +1130,7 @@ class MainWindow:
         # 显示游戏结果
         result = messagebox.askyesno(
             "游戏结束",
-            f"{winner}\n\n是否使用DeepSeek AI分析这局游戏？"
+            f"{winner}\n\n游戏已自动保存到历史记录。\n\n是否使用DeepSeek AI分析这局游戏？"
         )
 
         if result:
@@ -1091,6 +1139,13 @@ class MainWindow:
     def _handle_challenge_game_end(self):
         """处理闯关模式游戏结束"""
         game_state = self.game_manager.current_game
+
+        # 自动保存游戏到历史记录
+        try:
+            record = self.history_manager.add_game(game_state, game_mode='challenge')
+            self.logger.info(f"闯关模式游戏已自动保存到历史记录: {record.game_id}")
+        except Exception as e:
+            self.logger.error(f"保存闯关模式游戏历史失败: {e}")
 
         # 处理闯关结果
         result = self.challenge_mode.process_game_result(
@@ -1400,10 +1455,18 @@ class MainWindow:
         # 获取游戏状态
         game_state = self.game_manager.current_game
 
+        # 自动保存游戏到历史记录
+        try:
+            record = self.history_manager.add_game(game_state, game_mode='timed')
+            self.logger.info(f"计时模式游戏已自动保存到历史记录: {record.game_id}")
+        except Exception as e:
+            self.logger.error(f"保存计时模式游戏历史失败: {e}")
+
         # 显示提示并询问是否分析
         result = messagebox.askyesno(
             "⏰ 计时模式 - 时间到",
             f"时间到！游戏自动结束\n\n"
+            f"游戏已自动保存到历史记录。\n\n"
             f"━━━━━━━━━━━━━━━━\n"
             f"📊 最终得分\n"
             f"━━━━━━━━━━━━━━━━\n"
@@ -1422,3 +1485,98 @@ class MainWindow:
         # 如果用户选择分析
         if result:
             self._request_analysis()
+
+    def _sync_state_to_stm32(self):
+        """手动同步上位机状态到下位机"""
+        try:
+            if not self.serial_handler.is_connected():
+                messagebox.showwarning("同步失败", "未连接到STM32")
+                return
+
+            # 获取当前游戏状态
+            game_state = self.game_manager.current_game
+
+            self.logger.info(f"🔄 开始同步状态到STM32: 玩家={game_state.current_player.name}, "
+                            f"黑={game_state.black_count}, 白={game_state.white_count}, "
+                            f"步数={game_state.move_count}")
+
+            # 发送完整游戏状态
+            success = self.serial_handler.send_full_game_state(game_state)
+
+            if success:
+                self.logger.info("✅ 游戏状态同步成功")
+                messagebox.showinfo("同步成功",
+                    f"游戏状态已同步到STM32\n\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"📊 同步信息\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"当前玩家: {game_state.current_player.name}\n"
+                    f"黑棋: {game_state.black_count}\n"
+                    f"白棋: {game_state.white_count}\n"
+                    f"步数: {game_state.move_count}\n\n"
+                    f"请检查下位机LED显示是否更新")
+            else:
+                self.logger.error("❌ 同步失败：发送数据失败")
+                messagebox.showerror("同步失败", "发送数据到STM32失败\n\n可能原因：\n• 串口通信异常\n• 设备未响应")
+
+        except Exception as e:
+            self.logger.error(f"❌ 同步状态失败: {e}")
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("同步错误", f"同步时发生错误:\n{e}")
+
+    def on_mode_changed_from_stm32(self, mode_name: str, time_limit: int):
+        """处理来自STM32的模式变化通知
+
+        Args:
+            mode_name: 模式名称 ('normal', 'challenge', 'timed')
+            time_limit: 时间限制（秒）
+        """
+        try:
+            self.logger.info(f"🔄 同步游戏模式: {mode_name}, 时限={time_limit}秒")
+
+            # 更新控制面板的模式显示
+            if self.control_panel:
+                # 模式名称映射
+                mode_display_map = {
+                    'normal': '普通模式',
+                    'challenge': '闯关模式',
+                    'timed': '计时模式'
+                }
+                display_name = mode_display_map.get(mode_name, '普通模式')
+
+                # 更新控制面板的模式选择框（直接设置，不触发回调）
+                self.control_panel.mode_var.set(display_name)
+
+            # 如果是计时模式，启动计时器
+            if mode_name == 'timed' and time_limit > 0:
+                if self.timer_display:
+                    self.timer_display.show()
+                    self.timed_mode.reset(duration=time_limit)
+                    self.timed_mode.start()
+                    self.logger.info(f"⏱️ 启动计时模式: {time_limit}秒")
+
+            # 如果是闯关模式，初始化
+            elif mode_name == 'challenge':
+                self.logger.info("🎯 进入闯关模式")
+                # 触发现有的闯关模式逻辑
+                from communication.serial_handler import SerialProtocol
+                self._on_game_mode_changed(SerialProtocol.GAME_MODE_CHALLENGE)
+
+            # 如果是普通模式
+            elif mode_name == 'normal':
+                # 隐藏计时器
+                if self.timer_display:
+                    self.timer_display.hide()
+
+                # 停止计时
+                if self.timed_mode.is_running():
+                    self.timed_mode.stop()
+
+            # 更新状态显示
+            self._update_status_display()
+
+        except Exception as e:
+            self.logger.error(f"处理模式变化失败: {e}")
+            import traceback
+            traceback.print_exc()

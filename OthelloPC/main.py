@@ -164,12 +164,35 @@ class OthelloPC:
                 # 心跳响应
                 self._last_heartbeat_time = time.time()
                 if self.main_window:
-                    self.main_window.update_connection_status(True)
+                    # 修复：转换布尔值为字符串状态
+                    self.main_window.update_connection_status('connected')
                 self.logger.debug("收到心跳响应")
 
             elif command == SerialProtocol.CMD_GAME_CONFIG:  # 0x03
                 # 游戏配置响应（新游戏确认）
                 self.logger.info("收到新游戏确认")
+
+            elif command == SerialProtocol.CMD_MODE_SELECT:  # 0x0D
+                # 模式选择通知
+                if len(data) >= 3:
+                    import struct
+                    mode, time_limit = struct.unpack('<BH', data[:3])
+
+                    # 模式映射
+                    mode_map = {
+                        1: 'normal',     # GAME_MODE_NORMAL
+                        2: 'challenge',  # GAME_MODE_CHALLENGE
+                        3: 'timed'       # GAME_MODE_TIMED
+                    }
+                    mode_name = mode_map.get(mode, 'normal')
+
+                    self.logger.info(f"📋 收到模式选择: {mode_name}, 时限={time_limit}秒")
+
+                    # 通知主窗口更新模式
+                    if self.main_window:
+                        self.main_window.on_mode_changed_from_stm32(mode_name, time_limit)
+                else:
+                    self.logger.warning("CMD_MODE_SELECT数据长度不足")
 
             else:
                 self.logger.debug(f"收到未知命令: 0x{command:02X}, 数据长度: {len(data)}")
@@ -243,7 +266,9 @@ class OthelloPC:
                     if self.serial_handler:
                         is_connected = self.serial_handler.is_connected()
                         if self.main_window:
-                            self.main_window.update_connection_status(is_connected)
+                            # 修复：转换布尔值为字符串状态
+                            status = 'connected' if is_connected else 'disconnected'
+                            self.main_window.update_connection_status(status)
 
                     # 发送心跳包
                     if self.serial_handler and self.serial_handler.is_connected():

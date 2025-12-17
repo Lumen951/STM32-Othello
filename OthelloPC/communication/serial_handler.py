@@ -414,6 +414,48 @@ class SerialHandler:
         data = struct.pack('<HB', remaining_time, timer_state)
         return self.send_command(SerialProtocol.CMD_TIMER_UPDATE, data)
 
+    def send_full_game_state(self, game_state) -> bool:
+        """发送完整游戏状态到STM32（用于手动同步）
+
+        Args:
+            game_state: GameState对象
+
+        Returns:
+            bool: 发送是否成功
+        """
+        try:
+            # 构建72字节数据包
+            data = bytearray(72)
+
+            # 1. 棋盘数据 (0-63字节)
+            for row in range(8):
+                for col in range(8):
+                    idx = row * 8 + col
+                    data[idx] = game_state.board[row][col].value
+
+            # 2. 当前玩家 (64字节)
+            data[64] = game_state.current_player.value
+
+            # 3. 棋子计数 (65-66字节)
+            data[65] = game_state.black_count
+            data[66] = game_state.white_count
+
+            # 4. 游戏结束标志 (67字节)
+            data[67] = 1 if game_state.status.value != 0 else 0
+
+            # 5. 走法计数 (68-71字节, little-endian)
+            struct.pack_into('<I', data, 68, game_state.move_count)
+
+            self.logger.info(f"发送完整游戏状态: 玩家={game_state.current_player.name}, "
+                            f"黑={game_state.black_count}, 白={game_state.white_count}")
+
+            # 发送数据（使用CMD_BOARD_STATE命令）
+            return self.send_command(SerialProtocol.CMD_BOARD_STATE, bytes(data))
+
+        except Exception as e:
+            self.logger.error(f"构建游戏状态数据失败: {e}")
+            return False
+
     def _auto_detect_port(self) -> Optional[str]:
         """自动检测STM32设备端口"""
         ports = self.get_available_ports()
