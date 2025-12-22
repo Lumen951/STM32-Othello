@@ -58,6 +58,7 @@ typedef enum {
     CMD_MODE_SELECT    = 0x0D,     ///< Game mode selection (normal/challenge/timed)
     CMD_SCORE_UPDATE   = 0x0E,     ///< Score update notification
     CMD_TIMER_UPDATE   = 0x0F,     ///< Timer update notification
+    CMD_CHEAT_COLOR_SELECT = 0x10, ///< Cheat mode color selection
     CMD_ERROR          = 0xFF      ///< Error response
 } Protocol_Command_t;
 
@@ -178,7 +179,8 @@ typedef struct {
 typedef enum {
     GAME_MODE_NORMAL    = 0x01,     ///< Normal mode
     GAME_MODE_CHALLENGE = 0x02,     ///< Challenge mode (cumulative score)
-    GAME_MODE_TIMED     = 0x03      ///< Timed mode (countdown timer)
+    GAME_MODE_TIMED     = 0x03,     ///< Timed mode (countdown timer)
+    GAME_MODE_CHEAT     = 0x04      ///< Cheat mode (free placement, no turn switching)
 } Game_Mode_t;
 
 /**
@@ -188,6 +190,13 @@ typedef struct {
     uint8_t mode;                   ///< Game mode (Game_Mode_t)
     uint16_t time_limit;            ///< Time limit in seconds (for timed mode, 0 for others)
 } Mode_Select_Data_t;
+
+/**
+ * @brief Cheat mode color selection data structure (for CMD_CHEAT_COLOR_SELECT)
+ */
+typedef struct {
+    uint8_t player_color;           ///< Selected color (1=BLACK, 2=WHITE)
+} Cheat_Color_Select_Data_t;
 
 /**
  * @brief Score update data structure (for CMD_SCORE_UPDATE)

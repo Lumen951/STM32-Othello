@@ -91,6 +91,7 @@ Othello_Status_t Othello_NewGame(GameState_t* state)
     state->move_count = 0;
     state->consecutive_passes = 0;
     state->game_start_time = HAL_GetTick();
+    state->game_mode = GAME_MODE_NORMAL;  // Default to normal mode
 
     // Initialize last move
     state->last_move.row = 0xFF;  // Invalid position indicates no move yet
@@ -160,24 +161,31 @@ uint8_t Othello_MakeMove(GameState_t* state, uint8_t row, uint8_t col, PieceType
     Othello_UpdatePieceCounts(state);
     Othello_InvalidateValidMovesCache(state);
 
-    // Switch to next player
-    state->current_player = OTHELLO_OPPOSITE_PLAYER(player);
+    // Check game mode for player switching logic
+    if (state->game_mode == GAME_MODE_CHEAT) {
+        // Cheat mode: Do NOT switch player, keep current_player unchanged
+        // No need to check for valid moves or game over
+        // Player can continue placing same color pieces
+    } else {
+        // Normal mode: Switch to next player
+        state->current_player = OTHELLO_OPPOSITE_PLAYER(player);
 
-    // Check if next player has any valid moves
-    if (!Othello_HasValidMoves(state, state->current_player)) {
-        if (!Othello_HasValidMoves(state, player)) {
-            // Neither player can move - game over
-            Othello_UpdateGameStatus(state);
-        } else {
-            // Next player passes, switch back
-            state->current_player = player;
-            state->consecutive_passes = 1;
+        // Check if next player has any valid moves
+        if (!Othello_HasValidMoves(state, state->current_player)) {
+            if (!Othello_HasValidMoves(state, player)) {
+                // Neither player can move - game over
+                Othello_UpdateGameStatus(state);
+            } else {
+                // Next player passes, switch back
+                state->current_player = player;
+                state->consecutive_passes = 1;
+            }
         }
-    }
 
-    // Update game status if board is full
-    if (state->black_count + state->white_count == 64) {
-        Othello_UpdateGameStatus(state);
+        // Update game status if board is full
+        if (state->black_count + state->white_count == 64) {
+            Othello_UpdateGameStatus(state);
+        }
     }
 
     return total_flipped;
@@ -409,7 +417,11 @@ Othello_Status_t Othello_ResetState(GameState_t* state)
         return OTHELLO_ERROR;
     }
 
-    return Othello_NewGame(state);
+    Game_Mode_t saved_mode = state->game_mode;  // Save current mode
+    Othello_NewGame(state);
+    state->game_mode = saved_mode;              // Restore mode
+
+    return OTHELLO_OK;
 }
 
 /**

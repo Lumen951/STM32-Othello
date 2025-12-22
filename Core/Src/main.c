@@ -68,6 +68,10 @@ static uint32_t cursor_blink_timer = 0; // Cursor blink timer
 
 /* Game mode variables */
 static Game_Mode_t current_game_mode = GAME_MODE_NORMAL;  // Current game mode
+static bool is_displaying_result = false;  // Flag: displaying game result (prevent state updates)
+
+/* Game end handling flag (set in interrupt context, processed in main loop) */
+static volatile bool game_end_pending = false;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -512,6 +516,15 @@ void App_Init(void)
  */
 void App_Main_Loop(void)
 {
+  /* === Priority 1: Process pending game end (set from interrupt context) === */
+  if (game_end_pending) {
+    game_end_pending = false;  // Clear flag
+    DEBUG_INFO("[APP_LOOP] Processing pending game end from interrupt...\r\n");
+    App_HandleGameOver();  // Safe to call in main loop context
+    DEBUG_INFO("[APP_LOOP] Game end processing completed\r\n");
+    return;  // Process only game end in this iteration
+  }
+
   /* Process keypad events */
   Key_t key_event = Keypad_GetKey();
   if (key_event.state != KEY_RELEASED) {
@@ -522,9 +535,7 @@ void App_Main_Loop(void)
   /* Update game board display */
   App_UpdateGameDisplay();
 
-  /* Process protocol commands if any (handled by callback) */
-
-  /* Check for game over conditions */
+  /* Check for game over conditions (local game end) */
   if (game_initialized && Othello_IsGameOver(&game_state)) {
     App_HandleGameOver();
   }
@@ -615,6 +626,29 @@ void App_ProcessKeyEvent(Key_t* key_event)
       App_DisplayGameBoard();
       Send_GameState_Via_Protocol(&game_state);
       return;  // Key was handled by game control
+    }
+
+    // Handle 'C' key for cheat mode toggle
+    if (logical_key == KEYPAD_KEY_C) {
+      // Toggle cheat mode
+      if (current_game_mode == GAME_MODE_CHEAT) {
+        // Exit cheat mode, return to normal mode
+        current_game_mode = GAME_MODE_NORMAL;
+        game_state.game_mode = GAME_MODE_NORMAL;
+        game_state.current_player = PIECE_BLACK;
+        DEBUG_INFO("[APP] Exited cheat mode -> Normal mode\r\n");
+      } else {
+        // Enter cheat mode
+        current_game_mode = GAME_MODE_CHEAT;
+        Othello_ResetState(&game_state);
+        game_state.game_mode = GAME_MODE_CHEAT;
+        // Keep current_player as is (will be set by PC or default BLACK)
+        DEBUG_INFO("[APP] Entered cheat mode\r\n");
+      }
+
+      App_DisplayGameBoard();
+      Send_GameState_Via_Protocol(&game_state);
+      return;
     }
 
     // Check if game is in playing state before processing game keys
@@ -829,31 +863,91 @@ void App_UpdateGameDisplay(void)
  */
 void App_HandleGameOver(void)
 {
-  static bool handled = false;
+  static uint32_t last_handled_move_count = 0;
 
-  if (handled) {
-    return;  // Already handled
+  // 检查是否已经处理过这局游戏（使用move_count作为版本号）
+  if (game_state.move_count == last_handled_move_count) {
+    DEBUG_INFO("[GAME_OVER] Already handled move_count=%lu, skipping\r\n", game_state.move_count);
+    return;  // 已经处理过这局游戏
   }
 
-  handled = true;
+  // 记录当前游戏的move_count
+  last_handled_move_count = game_state.move_count;
+
+  DEBUG_INFO("\r\n========== GAME OVER HANDLER START ==========\r\n");
+  DEBUG_INFO("[GAME_OVER] Handling game over, move_count=%lu\r\n", game_state.move_count);
+  DEBUG_INFO("[GAME_OVER] current_game_mode=%d (CHALLENGE=%d)\r\n",
+             current_game_mode, GAME_MODE_CHALLENGE);
+  DEBUG_INFO("[GAME_OVER] Winner: BLACK=%d WHITE=%d status=%d\r\n",
+             game_state.black_count, game_state.white_count, game_state.status);
+
+  // 设置正在显示结果的标志
+  is_displaying_result = true;
+  DEBUG_INFO("[GAME_OVER] Set is_displaying_result = TRUE\r\n");
 
   /* Update statistics */
   Othello_UpdateStats(&game_stats, &game_state);
 
+  /* === 显示游戏结果文字（所有模式通用） === */
+  PieceType_t winner = Othello_GetWinner(&game_state);
+
+  DEBUG_INFO("[GAME_OVER] Displaying game result: Winner=%d (BLACK=%d, WHITE=%d)\r\n",
+             winner, PIECE_BLACK, PIECE_WHITE);
+
+  if (winner == PIECE_BLACK) {
+    // Player (BLACK) wins - show WIN (letter by letter)
+    DEBUG_INFO("[GAME_OVER] Displaying 'WIN' letter by letter...\r\n");
+    LED_Text_Display_Sequential("W", WS2812B_COLOR_GREEN, 1000);
+    LED_Text_Display_Sequential("I", WS2812B_COLOR_GREEN, 1000);
+    LED_Text_Display_Sequential("N", WS2812B_COLOR_GREEN, 1000);
+    DEBUG_INFO("[GAME_OVER] 'WIN' display completed\r\n");
+  } else if (winner == PIECE_WHITE) {
+    // AI/Opponent (WHITE) wins - show LOSE (letter by letter)
+    DEBUG_INFO("[GAME_OVER] Displaying 'LOSE' letter by letter...\r\n");
+    LED_Text_Display_Sequential("L", WS2812B_COLOR_RED, 1000);
+    LED_Text_Display_Sequential("O", WS2812B_COLOR_RED, 1000);
+    LED_Text_Display_Sequential("S", WS2812B_COLOR_RED, 1000);
+    LED_Text_Display_Sequential("E", WS2812B_COLOR_RED, 1000);
+    DEBUG_INFO("[GAME_OVER] 'LOSE' display completed\r\n");
+  } else {
+    // Draw game - show DRAW (letter by letter)
+    DEBUG_INFO("[GAME_OVER] Displaying 'DRAW' letter by letter...\r\n");
+    LED_Text_Display_Sequential("D", WS2812B_COLOR_YELLOW, 1000);
+    LED_Text_Display_Sequential("R", WS2812B_COLOR_YELLOW, 1000);
+    LED_Text_Display_Sequential("A", WS2812B_COLOR_YELLOW, 1000);
+    LED_Text_Display_Sequential("W", WS2812B_COLOR_YELLOW, 1000);
+    DEBUG_INFO("[GAME_OVER] 'DRAW' display completed\r\n");
+  }
+
+  // Clear display after text sequence
+  DEBUG_INFO("[GAME_OVER] Clearing display...\r\n");
+  WS2812B_Clear();
+  WS2812B_Update();
+  HAL_Delay(500);  // Brief pause before final board display
+
   /* Process challenge mode if active */
   if (current_game_mode == GAME_MODE_CHALLENGE) {
+    DEBUG_INFO("[CHALLENGE] Processing challenge mode results...\r\n");
+
+    /* === Process overall challenge status === */
     Challenge_Status_t challenge_status = Challenge_ProcessGameResult(&game_state);
+
+    DEBUG_INFO("[CHALLENGE] Challenge status after processing: %d\r\n", challenge_status);
 
     if (challenge_status == CHALLENGE_WIN) {
       DEBUG_INFO("[CHALLENGE] WIN condition met! Total score: %d\r\n",
                  Challenge_GetTotalScore());
+      DEBUG_INFO("[CHALLENGE] Displaying 'WIN' animation (3 seconds)...\r\n");
       // LED text display is handled by Challenge_ProcessGameResult
       HAL_Delay(3000);  // Display WIN for 3 seconds
+      DEBUG_INFO("[CHALLENGE] WIN animation completed\r\n");
     } else if (challenge_status == CHALLENGE_GAME_OVER) {
       DEBUG_INFO("[CHALLENGE] GAME OVER! Consecutive losses: %d\r\n",
                  Challenge_GetConsecutiveLosses());
+      DEBUG_INFO("[CHALLENGE] Displaying 'OVER' animation (3 seconds)...\r\n");
       // LED text display is handled by Challenge_ProcessGameResult
       HAL_Delay(3000);  // Display OVER for 3 seconds
+      DEBUG_INFO("[CHALLENGE] OVER animation completed\r\n");
     } else {
       DEBUG_INFO("[CHALLENGE] Game %d completed. Total score: %d\r\n",
                  Challenge_GetGamesPlayed(), Challenge_GetTotalScore());
@@ -861,7 +955,7 @@ void App_HandleGameOver(void)
   }
 
   /* Show winner on board */
-  PieceType_t winner = Othello_GetWinner(&game_state);
+  DEBUG_INFO("[GAME_OVER] Displaying final board state...\r\n");
   WS2812B_Clear();
 
   if (winner == PIECE_BLACK) {
@@ -883,13 +977,18 @@ void App_HandleGameOver(void)
   WS2812B_Update();
 
   /* Send final game state */
+  DEBUG_INFO("[GAME_OVER] Sending final game state to PC...\r\n");
   Send_GameState_Via_Protocol(&game_state);
 
   /* Show result for 5 seconds */
+  DEBUG_INFO("[GAME_OVER] Displaying result for 5 seconds...\r\n");
   HAL_Delay(5000);
 
-  /* Reset handled flag for next game */
-  handled = false;
+  // 清除正在显示结果的标志
+  is_displaying_result = false;
+  DEBUG_INFO("[GAME_OVER] Set is_displaying_result = FALSE\r\n");
+
+  DEBUG_INFO("========== GAME OVER HANDLER END ==========\r\n\r\n");
 }
 
 /**
@@ -961,7 +1060,8 @@ void Protocol_Command_Handler(Protocol_Command_t cmd, uint8_t* data, uint8_t len
           if (flipped > 0) {
             App_DisplayGameBoard();  // Update display
             Protocol_SendAck(cmd, 0); // 0 = success
-            Send_GameState_Via_Protocol(&game_state); // Send updated state
+            // REMOVED: 避免旧状态覆盖上位机的新状态
+            // Send_GameState_Via_Protocol(&game_state);
           } else {
             Protocol_SendAck(cmd, 2); // 2 = move failed
           }
@@ -1017,8 +1117,76 @@ void Protocol_Command_Handler(Protocol_Command_t cmd, uint8_t* data, uint8_t len
       break;
 
     case CMD_BOARD_STATE:
-      /* Send current game state */
-      Send_GameState_Via_Protocol(&game_state);
+      /* Receive and update game state from PC (Sync direction: PC → STM32) */
+
+      // ========== 防止显示期间被覆盖 ==========
+      if (is_displaying_result) {
+        // 拒绝在显示游戏结果期间更新状态
+        Protocol_SendAck(cmd, 4);  // 4 = Busy/Rejected
+        DEBUG_INFO("[SYNC] Refused state update: displaying game result\r\n");
+        break;
+      }
+
+      // ========== 正常状态更新流程 ==========
+      if (len == 72) {  // Game_State_Data_t = 72 bytes
+        // ========== 解析上位机发来的完整状态 ==========
+
+        // 1. 更新棋盘 (0-63字节)
+        for (uint8_t i = 0; i < 64; i++) {
+          uint8_t row = i / 8;
+          uint8_t col = i % 8;
+          game_state.board[row][col] = (PieceType_t)data[i];
+        }
+
+        // 2. 更新当前玩家 (64字节)
+        game_state.current_player = (PieceType_t)data[64];
+
+        // 3. 更新棋子计数 (65-66字节)
+        game_state.black_count = data[65];
+        game_state.white_count = data[66];
+
+        // 4. 更新游戏结束标志 (67字节)
+        bool game_just_ended = false;  // 标记游戏是否刚刚结束
+        if (data[67] == 1) {
+          // 根据分数设置状态
+          if (game_state.black_count > game_state.white_count) {
+            game_state.status = GAME_STATUS_BLACK_WIN;
+          } else if (game_state.black_count < game_state.white_count) {
+            game_state.status = GAME_STATUS_WHITE_WIN;
+          } else {
+            game_state.status = GAME_STATUS_DRAW;
+          }
+          game_just_ended = true;  // 标记游戏结束
+        } else {
+          game_state.status = GAME_STATUS_PLAYING;
+        }
+
+        // 5. 更新走法计数 (68-71字节, little-endian)
+        game_state.move_count = data[68] | ((uint32_t)data[69] << 8) |
+                               ((uint32_t)data[70] << 16) | ((uint32_t)data[71] << 24);
+
+        // ========== 如果游戏刚结束，设置标志让主循环处理（避免中断阻塞） ==========
+        if (game_just_ended) {
+          DEBUG_INFO("[SYNC] Game ended from PC, status=%d, setting game_end_pending flag\r\n", game_state.status);
+          game_end_pending = true;  // 只设置标志，不阻塞中断
+          App_DisplayGameBoard();    // 快速更新棋盘显示
+        } else {
+          // 游戏进行中，只更新棋盘显示
+          App_DisplayGameBoard();
+        }
+
+        // 发送确认
+        Protocol_SendAck(cmd, 0);  // Success
+
+        DEBUG_INFO("[SYNC] Game state updated from PC: move_count=%lu, "
+                   "player=%d, black=%d, white=%d\r\n",
+                   game_state.move_count, game_state.current_player,
+                   game_state.black_count, game_state.white_count);
+      } else {
+        // 数据长度错误
+        Protocol_SendAck(cmd, 1);  // Invalid length
+        DEBUG_ERROR("[SYNC] Invalid data length: %d (expected 72)\r\n", len);
+      }
       break;
 
     case CMD_GAME_CONTROL:
@@ -1067,6 +1235,22 @@ void Protocol_Command_Handler(Protocol_Command_t cmd, uint8_t* data, uint8_t len
           // Timed mode not yet implemented
           DEBUG_INFO("[MODE] Timed mode not yet implemented\r\n");
           Protocol_SendAck(cmd, 1);  // Not implemented
+        } else if (current_game_mode == GAME_MODE_CHEAT) {
+          // Cheat mode: free placement mode
+          // End challenge mode if active
+          if (Challenge_GetState() != CHALLENGE_STATE_INACTIVE) {
+            Challenge_End();
+          }
+
+          // Reset game and set cheat mode
+          Othello_ResetState(&game_state);
+          game_state.game_mode = GAME_MODE_CHEAT;
+
+          DEBUG_INFO("[MODE] Cheat mode selected - waiting for color selection\r\n");
+          Protocol_SendAck(cmd, 0);  // Success
+
+          // Send current game state to PC
+          Send_GameState_Via_Protocol(&game_state);
         } else {
           Protocol_SendAck(cmd, 3);  // Invalid mode
         }
@@ -1084,9 +1268,45 @@ void Protocol_Command_Handler(Protocol_Command_t cmd, uint8_t* data, uint8_t len
         // Optional: Display time on LED matrix if needed
         // For now, just acknowledge receipt
         DEBUG_INFO("[TIMER] Remaining: %d seconds\r\n", remaining_time);
+        (void)remaining_time;  // Avoid unused variable warning when DEBUG is disabled
         Protocol_SendAck(cmd, 0);  // Success
       } else {
         Protocol_SendAck(cmd, 1);  // Invalid length
+      }
+      break;
+
+    case CMD_CHEAT_COLOR_SELECT:
+      /* Handle cheat mode color selection */
+      if (len == sizeof(Cheat_Color_Select_Data_t)) {
+        Cheat_Color_Select_Data_t* color_data = (Cheat_Color_Select_Data_t*)data;
+
+        // Validate color (1=BLACK, 2=WHITE)
+        if (color_data->player_color != PIECE_BLACK &&
+            color_data->player_color != PIECE_WHITE) {
+          DEBUG_ERROR("[CHEAT] Invalid color: %d\r\n", color_data->player_color);
+          Protocol_SendAck(cmd, 1);  // Invalid parameter
+          break;
+        }
+
+        // Only allow in cheat mode
+        if (current_game_mode != GAME_MODE_CHEAT) {
+          DEBUG_ERROR("[CHEAT] Not in cheat mode\r\n");
+          Protocol_SendAck(cmd, 2);  // Wrong mode
+          break;
+        }
+
+        // Set the selected color as current player
+        game_state.current_player = (PieceType_t)color_data->player_color;
+
+        DEBUG_INFO("[CHEAT] Color selected: %s\r\n",
+                   color_data->player_color == PIECE_BLACK ? "BLACK" : "WHITE");
+
+        Protocol_SendAck(cmd, 0);  // Success
+
+        // Send updated game state to PC
+        Send_GameState_Via_Protocol(&game_state);
+      } else {
+        Protocol_SendAck(cmd, 3);  // Invalid length
       }
       break;
 

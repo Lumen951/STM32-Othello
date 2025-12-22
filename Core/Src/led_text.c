@@ -157,52 +157,6 @@ LED_Text_Status_t LED_Text_Init(void)
 }
 
 /**
- * @brief Display text on LED matrix (centered)
- */
-LED_Text_Status_t LED_Text_Display(const char* text, RGB_Color_t color)
-{
-    if (!text) {
-        return LED_TEXT_INVALID_PARAM;
-    }
-
-    // Clear display first
-    WS2812B_Clear();
-
-    uint8_t text_len = strlen(text);
-    if (text_len == 0) {
-        WS2812B_Update();
-        return LED_TEXT_OK;
-    }
-
-    // Calculate total width needed
-    uint8_t total_width = text_len * (LED_TEXT_CHAR_WIDTH + LED_TEXT_CHAR_SPACING) - LED_TEXT_CHAR_SPACING;
-
-    // Center text horizontally
-    int8_t start_x = (WS2812B_LED_COLS - total_width) / 2;
-    if (start_x < 0) start_x = 0;
-
-    // Center text vertically
-    int8_t start_y = (WS2812B_LED_ROWS - LED_TEXT_CHAR_HEIGHT) / 2;
-    if (start_y < 0) start_y = 0;
-
-    // Draw each character
-    uint8_t x_pos = start_x;
-    for (uint8_t i = 0; i < text_len; i++) {
-        if (x_pos + LED_TEXT_CHAR_WIDTH > WS2812B_LED_COLS) {
-            break;  // No more space
-        }
-
-        LED_Text_DisplayChar(text[i], x_pos, start_y, color);
-        x_pos += LED_TEXT_CHAR_WIDTH + LED_TEXT_CHAR_SPACING;
-    }
-
-    // Update display
-    WS2812B_Update();
-
-    return LED_TEXT_OK;
-}
-
-/**
  * @brief Display single character on LED matrix
  */
 LED_Text_Status_t LED_Text_DisplayChar(char c, uint8_t x, uint8_t y, RGB_Color_t color)
@@ -218,44 +172,55 @@ LED_Text_Status_t LED_Text_DisplayChar(char c, uint8_t x, uint8_t y, RGB_Color_t
 }
 
 /**
- * @brief Scroll text across LED matrix
- */
-LED_Text_Status_t LED_Text_Scroll(const char* text, RGB_Color_t color,
-                                  Scroll_Direction_t direction, uint16_t delay_ms)
-{
-    if (!text) {
-        return LED_TEXT_INVALID_PARAM;
-    }
-
-    // Simple left scroll implementation
-    uint8_t text_len = strlen(text);
-    uint8_t total_width = text_len * (LED_TEXT_CHAR_WIDTH + LED_TEXT_CHAR_SPACING);
-
-    for (int16_t offset = WS2812B_LED_COLS; offset > -total_width; offset--) {
-        WS2812B_Clear();
-
-        int16_t x_pos = offset;
-        for (uint8_t i = 0; i < text_len; i++) {
-            if (x_pos >= -LED_TEXT_CHAR_WIDTH && x_pos < WS2812B_LED_COLS) {
-                LED_Text_DisplayChar(text[i], x_pos, 0, color);
-            }
-            x_pos += LED_TEXT_CHAR_WIDTH + LED_TEXT_CHAR_SPACING;
-        }
-
-        WS2812B_Update();
-        HAL_Delay(delay_ms);
-    }
-
-    return LED_TEXT_OK;
-}
-
-/**
  * @brief Clear text display
  */
 LED_Text_Status_t LED_Text_Clear(void)
 {
     WS2812B_Clear();
     WS2812B_Update();
+    return LED_TEXT_OK;
+}
+
+/**
+ * @brief Display text sequentially, one character at a time (Plan A)
+ * @param text Text string to display (each character shown individually)
+ * @param color RGB color for text
+ * @param letter_duration_ms Duration to show each letter in milliseconds
+ * @retval LED_Text_Status_t Status of operation
+ * @note Each character is centered and displayed for the specified duration
+ *       Example: "WIN" -> shows 'W' (1s), 'I' (1s), 'N' (1s)
+ */
+LED_Text_Status_t LED_Text_Display_Sequential(const char* text, RGB_Color_t color,
+                                               uint16_t letter_duration_ms)
+{
+    if (!text) {
+        return LED_TEXT_INVALID_PARAM;
+    }
+
+    uint8_t text_len = strlen(text);
+    if (text_len == 0) {
+        return LED_TEXT_INVALID_PARAM;
+    }
+
+    // Calculate center position for single character (5x7)
+    int8_t center_x = (WS2812B_LED_COLS - LED_TEXT_CHAR_WIDTH) / 2;   // (8 - 5) / 2 = 1
+    int8_t center_y = (WS2812B_LED_ROWS - LED_TEXT_CHAR_HEIGHT) / 2;  // (8 - 7) / 2 = 0
+
+    // Display each character sequentially
+    for (uint8_t i = 0; i < text_len; i++) {
+        // Clear display
+        WS2812B_Clear();
+
+        // Display single character centered
+        LED_Text_DisplayChar(text[i], center_x, center_y, color);
+
+        // Update LED matrix
+        WS2812B_Update();
+
+        // Wait for specified duration
+        HAL_Delay(letter_duration_ms);
+    }
+
     return LED_TEXT_OK;
 }
 

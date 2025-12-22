@@ -264,10 +264,10 @@ static void Challenge_UpdateState(void)
 static void Challenge_DisplayResult(Challenge_Status_t result)
 {
     if (result == CHALLENGE_WIN) {
-        // Display "WIN" on LED matrix
-        LED_Text_Display("WIN", WS2812B_COLOR_GREEN);
+        // Display "WIN" on LED matrix (Plan A: sequential character display)
+        LED_Text_Display_Sequential("WIN", WS2812B_COLOR_GREEN, 1000);
     } else if (result == CHALLENGE_GAME_OVER) {
-        // Display "OVER" on LED matrix
-        LED_Text_Display("OVER", WS2812B_COLOR_RED);
+        // Display "OVER" on LED matrix (Plan A: sequential character display)
+        LED_Text_Display_Sequential("OVER", WS2812B_COLOR_RED, 1000);
     }
 }

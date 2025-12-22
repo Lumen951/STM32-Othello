@@ -32,16 +32,6 @@ typedef enum {
     LED_TEXT_INVALID_PARAM
 } LED_Text_Status_t;
 
-/**
- * @brief Text scroll direction
- */
-typedef enum {
-    SCROLL_LEFT = 0,
-    SCROLL_RIGHT,
-    SCROLL_UP,
-    SCROLL_DOWN
-} Scroll_Direction_t;
-
 /* Exported constants --------------------------------------------------------*/
 
 /**
@@ -61,15 +51,6 @@ typedef enum {
 LED_Text_Status_t LED_Text_Init(void);
 
 /**
- * @brief Display text on LED matrix (centered)
- * @param text Text string to display (max 4 characters for 8x8 matrix)
- * @param color RGB color for text
- * @retval LED_Text_Status_t Status of operation
- * @note Text is displayed centered on the matrix
- */
-LED_Text_Status_t LED_Text_Display(const char* text, RGB_Color_t color);
-
-/**
  * @brief Display single character on LED matrix
  * @param c Character to display
  * @param x X position (0-7)
@@ -80,21 +61,22 @@ LED_Text_Status_t LED_Text_Display(const char* text, RGB_Color_t color);
 LED_Text_Status_t LED_Text_DisplayChar(char c, uint8_t x, uint8_t y, RGB_Color_t color);
 
 /**
- * @brief Scroll text across LED matrix
- * @param text Text string to scroll
- * @param color RGB color for text
- * @param direction Scroll direction
- * @param delay_ms Delay between scroll steps in milliseconds
- * @retval LED_Text_Status_t Status of operation
- */
-LED_Text_Status_t LED_Text_Scroll(const char* text, RGB_Color_t color,
-                                  Scroll_Direction_t direction, uint16_t delay_ms);
-
-/**
  * @brief Clear text display
  * @retval LED_Text_Status_t Status of operation
  */
 LED_Text_Status_t LED_Text_Clear(void);
+
+/**
+ * @brief Display text sequentially, one character at a time (Plan A)
+ * @param text Text string to display (each character shown individually)
+ * @param color RGB color for text
+ * @param letter_duration_ms Duration to show each letter in milliseconds
+ * @retval LED_Text_Status_t Status of operation
+ * @note Each character is centered and displayed for the specified duration
+ *       Example: "WIN" -> shows 'W' (1s), 'I' (1s), 'N' (1s)
+ */
+LED_Text_Status_t LED_Text_Display_Sequential(const char* text, RGB_Color_t color,
+                                               uint16_t letter_duration_ms);
 
 #ifdef __cplusplus
 }

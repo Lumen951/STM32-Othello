@@ -21,6 +21,7 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "uart_protocol.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -91,6 +92,7 @@ typedef struct {
     uint32_t game_start_time;       ///< Game start timestamp
     bool valid_moves_cache[8][8];   ///< Cache of valid moves for current player
     bool valid_moves_cached;        ///< Whether cache is valid
+    Game_Mode_t game_mode;          ///< Current game mode
 } GameState_t;
 
 /**

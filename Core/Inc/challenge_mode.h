@@ -7,7 +7,7 @@
  * @note Challenge mode features:
  *       - Cumulative score tracking across multiple games
  *       - Consecutive loss detection (2 losses → GAME OVER)
- *       - Win condition (total score ≥ 188 → WIN)
+ *       - Win condition (total score ≥ 50 → WIN)
  *       - LED text display for WIN/OVER messages
  */
 
@@ -67,7 +67,7 @@ typedef struct {
 /**
  * @brief Challenge mode thresholds
  */
-#define CHALLENGE_WIN_SCORE         188     ///< Total score needed to win (3 games × ~63 avg)
+#define CHALLENGE_WIN_SCORE         50     ///< Total score needed to win (3 games × ~63 avg)
 #define CHALLENGE_MAX_LOSSES        2       ///< Maximum consecutive losses before game over
 #define CHALLENGE_MAX_GAMES         10      ///< Maximum games in one challenge session
 

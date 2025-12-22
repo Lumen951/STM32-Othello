@@ -27,7 +27,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Core/Inc/ws2812b_driver.h ../Core/Inc/main.h \
  ../Core/Inc/keypad_driver.h ../Core/Inc/keypad_mapping.h \
  ../Core/Inc/uart_protocol.h ../Core/Inc/othello_engine.h \
- ../Core/Inc/game_control.h ../Core/Inc/uart_protocol.h \
+ ../Core/Inc/uart_protocol.h ../Core/Inc/game_control.h \
  ../Core/Inc/othello_engine.h ../Core/Inc/keypad_mapping.h \
  ../Core/Inc/challenge_mode.h ../Core/Inc/led_text.h \
  ../Core/Inc/ws2812b_driver.h ../Core/Inc/debug_print.h
@@ -63,8 +63,8 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Inc/keypad_mapping.h:
 ../Core/Inc/uart_protocol.h:
 ../Core/Inc/othello_engine.h:
-../Core/Inc/game_control.h:
 ../Core/Inc/uart_protocol.h:
+../Core/Inc/game_control.h:
 ../Core/Inc/othello_engine.h:
 ../Core/Inc/keypad_mapping.h:
 ../Core/Inc/challenge_mode.h:
