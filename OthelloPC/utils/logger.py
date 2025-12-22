@@ -83,6 +83,16 @@ class Logger:
         error_handler.setFormatter(formatter)
         self.logger.addHandler(error_handler)
 
+        # ========== 关键修复：配置根logger，使所有子模块的日志都能输出 ==========
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.DEBUG)
+
+        # 如果根logger还没有handler，添加相同的handler
+        if not root_logger.handlers:
+            root_logger.addHandler(console_handler)
+            root_logger.addHandler(file_handler)
+            root_logger.addHandler(error_handler)
+
     def debug(self, message: str):
         """记录调试信息"""
         self.logger.debug(message)

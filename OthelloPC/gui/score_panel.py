@@ -153,7 +153,7 @@ class ScorePanel(tk.Frame):
 
         self.challenge_total_label = tk.Label(
             total_score_frame,
-            text="0 / 188",
+            text="0 / 50",
             font=('Arial', 16, 'bold'),
             bg='white',
             fg=DieterStyle.COLORS['data_blue']
@@ -478,10 +478,10 @@ class ScorePanel(tk.Frame):
             stats: ChallengeStats对象
         """
         # 更新总分
-        self.challenge_total_label.config(text=f"{stats.total_score} / 188")
+        self.challenge_total_label.config(text=f"{stats.total_score} / 50")
 
         # 更新进度条
-        progress = min(100, (stats.total_score / 188) * 100)
+        progress = min(100, (stats.total_score / 50) * 100)
         bar_width = int(200 * progress / 100)
         self.progress_canvas.coords(self.progress_bar, 0, 0, bar_width, 20)
         self.progress_canvas.itemconfig(self.progress_text, text=f"{progress:.0f}%")

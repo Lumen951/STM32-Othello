@@ -164,6 +164,39 @@ class ControlPanel(tk.Frame):
         )
         self.ai_difficulty_combo.pack(side='left', fill='x', expand=True)
 
+        # === 作弊模式颜色选择（仅作弊模式可见）===
+        self.cheat_color_frame = tk.Frame(main_container, bg=DieterStyle.COLORS['board_bg'])
+        self.cheat_color_frame.pack(fill='x', padx=10, pady=5)
+        self.cheat_color_frame.pack_forget()  # 初始隐藏
+
+        color_label = tk.Label(
+            self.cheat_color_frame,
+            text="选择颜色:",
+            font=('Arial', 10, 'bold'),
+            bg=DieterStyle.COLORS['board_bg'],
+            fg=DieterStyle.COLORS['gray_dark']
+        )
+        color_label.pack(side='left', padx=(0, 10))
+
+        self.cheat_color_var = tk.StringVar(value="黑棋")
+        black_radio = ttk.Radiobutton(
+            self.cheat_color_frame,
+            text="黑棋",
+            variable=self.cheat_color_var,
+            value="黑棋",
+            command=self._on_cheat_color_changed
+        )
+        black_radio.pack(side='left', padx=5)
+
+        white_radio = ttk.Radiobutton(
+            self.cheat_color_frame,
+            text="白棋",
+            variable=self.cheat_color_var,
+            value="白棋",
+            command=self._on_cheat_color_changed
+        )
+        white_radio.pack(side='left', padx=5)
+
         # === 状态显示 ===
         status_frame = tk.Frame(main_container, bg='white', relief='ridge', bd=2)
         status_frame.pack(fill='x', padx=10, pady=(10, 5))
@@ -209,6 +242,18 @@ class ControlPanel(tk.Frame):
 
         # 如果连接了STM32，发送开始命令
         if self.serial_handler.is_connected():
+            # 重要：重新发送当前模式和时间限制到STM32（确保模式不被重置）
+            time_limit = 300 if self.current_mode == SerialProtocol.GAME_MODE_TIMED else 0
+            self.serial_handler.send_mode_select(self.current_mode, time_limit)
+
+            # 如果是作弊模式，重新发送颜色选择
+            if self.current_mode == SerialProtocol.GAME_MODE_CHEAT:
+                color_name = self.cheat_color_var.get()
+                player_color = 1 if color_name == "黑棋" else 2
+                self.serial_handler.send_cheat_color_select(player_color)
+                self.logger.info(f"重新发送作弊模式设置: 颜色={color_name}")
+
+            # 然后发送开始命令
             if self.serial_handler.send_game_start():
                 self._set_state('playing')
             else:
@@ -296,7 +341,7 @@ class ControlPanel(tk.Frame):
         # 映射模式名称到协议常量
         mode_map = {
             "普通模式": SerialProtocol.GAME_MODE_NORMAL,
-            "作弊模式": 0x04,  # 作弊模式（上位机棋盘编辑，不发送到STM32）
+            "作弊模式": SerialProtocol.GAME_MODE_CHEAT,
             "闯关模式": SerialProtocol.GAME_MODE_CHALLENGE,
             "计时模式": SerialProtocol.GAME_MODE_TIMED
         }
@@ -306,17 +351,19 @@ class ControlPanel(tk.Frame):
         # 显示/隐藏AI难度选择（仅闯关模式可见）
         if mode_name == "闯关模式":
             self.ai_difficulty_frame.pack(fill='x', padx=10, pady=5, after=self.mode_combo.master)
-        else:
+            self.cheat_color_frame.pack_forget()
+        elif mode_name == "作弊模式":
+            # 显示作弊模式颜色选择
             self.ai_difficulty_frame.pack_forget()
+            self.cheat_color_frame.pack(fill='x', padx=10, pady=5, after=self.mode_combo.master)
+        else:
+            # 普通模式和计时模式
+            self.ai_difficulty_frame.pack_forget()
+            self.cheat_color_frame.pack_forget()
 
         # 调用模式变化回调
         if self.on_mode_change:
             self.on_mode_change(self.current_mode)
-
-        # 作弊模式不需要发送到STM32（仅上位机棋盘编辑功能）
-        if mode_name == "作弊模式":
-            self.logger.info("切换到作弊模式（棋盘编辑）")
-            return
 
         if not self.serial_handler.is_connected():
             self.logger.warning("未连接到STM32，无法发送模式选择命令")
@@ -328,6 +375,10 @@ class ControlPanel(tk.Frame):
         self.logger.info(f"发送模式选择命令: {mode_name} (0x{self.current_mode:02X})")
         if self.serial_handler.send_mode_select(self.current_mode, time_limit):
             self.logger.info(f"模式切换成功: {mode_name}")
+
+            # 如果是作弊模式，立即发送颜色选择
+            if mode_name == "作弊模式":
+                self._on_cheat_color_changed()
         else:
             self.logger.error("发送模式选择命令失败")
 
@@ -415,3 +466,20 @@ class ControlPanel(tk.Frame):
             "困难": 2
         }
         return difficulty_map.get(self.ai_difficulty_var.get(), 1)
+
+    def _on_cheat_color_changed(self):
+        """作弊模式颜色选择变化回调"""
+        if self.current_mode != SerialProtocol.GAME_MODE_CHEAT:
+            return
+
+        color_name = self.cheat_color_var.get()
+        player_color = 1 if color_name == "黑棋" else 2  # 1=BLACK, 2=WHITE
+
+        # 触发上位机的颜色选择回调
+        if hasattr(self, 'on_cheat_color_selected') and self.on_cheat_color_selected:
+            self.on_cheat_color_selected(player_color)
+
+        # 发送颜色选择命令到STM32（仅用于显示同步）
+        if self.serial_handler and self.serial_handler.is_connected():
+            self.serial_handler.send_cheat_color_select(player_color)
+            self.logger.info(f"Cheat mode color selected: {color_name}")

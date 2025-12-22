@@ -42,6 +42,7 @@ class SerialProtocol:
     CMD_MODE_SELECT = 0x0D      # 模式选择
     CMD_SCORE_UPDATE = 0x0E     # 分数更新
     CMD_TIMER_UPDATE = 0x0F     # 计时器更新
+    CMD_CHEAT_COLOR_SELECT = 0x10  # 作弊模式颜色选择
     CMD_ERROR = 0xFF            # 错误响应
 
     # 游戏控制动作
@@ -55,6 +56,7 @@ class SerialProtocol:
     GAME_MODE_NORMAL = 0x01     # 普通模式
     GAME_MODE_CHALLENGE = 0x02  # 闯关模式
     GAME_MODE_TIMED = 0x03      # 计时模式
+    GAME_MODE_CHEAT = 0x04      # 作弊模式
 
     @staticmethod
     def calculate_checksum(command: int, length: int, data: bytes) -> int:
@@ -382,6 +384,39 @@ class SerialHandler:
         """
         data = struct.pack('<BH', mode, time_limit)
         return self.send_command(SerialProtocol.CMD_MODE_SELECT, data)
+
+    def send_cheat_color_select(self, player_color: int) -> bool:
+        """
+        发送作弊模式颜色选择命令
+
+        Args:
+            player_color: 玩家颜色 (1=黑棋, 2=白棋)
+
+        Returns:
+            bool: 发送是否成功
+        """
+        if player_color not in [1, 2]:
+            self.logger.error(f"Invalid player color: {player_color}")
+            return False
+
+        try:
+            # 构造数据包: uint8_t player_color
+            data = struct.pack('<B', player_color)
+
+            # 发送命令
+            success = self.send_command(SerialProtocol.CMD_CHEAT_COLOR_SELECT, data)
+
+            if success:
+                color_name = "BLACK" if player_color == 1 else "WHITE"
+                self.logger.info(f"Sent cheat color select: {color_name}")
+            else:
+                self.logger.error("Failed to send cheat color select command")
+
+            return success
+
+        except Exception as e:
+            self.logger.error(f"Error sending cheat color select: {e}")
+            return False
 
     def send_score_update(self, black_score: int, white_score: int,
                          total_score: int = 0, game_result: int = 0) -> bool:

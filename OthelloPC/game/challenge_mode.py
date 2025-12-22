@@ -66,7 +66,7 @@ class ChallengeMode:
     """Challenge mode manager"""
 
     # Constants
-    WIN_SCORE = 188  # Total score needed to win
+    WIN_SCORE = 50  # Total score needed to win
     MAX_LOSSES = 2   # Maximum consecutive losses
 
     def __init__(self, data_dir: str = "OthelloPC/data"):

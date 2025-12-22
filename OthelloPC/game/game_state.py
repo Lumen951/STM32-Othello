@@ -63,6 +63,7 @@ class GameState:
         self.game_start_time = None
         self.game_end_time = None
         self.moves_history: List[Move] = []
+        self.game_mode = 0  # 游戏模式: 0=NORMAL, 4=CHEAT
 
     def start_new_game(self):
         """开始新游戏"""
@@ -96,10 +97,12 @@ class GameState:
         # 放置棋子
         self.board[row][col] = player
 
-        # 翻转棋子
-        directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
-        for dx, dy in directions:
-            flipped_count += self._flip_pieces_in_direction(row, col, dx, dy, player)
+        # 仅在非作弊模式下翻转棋子
+        if self.game_mode != 4:  # GAME_MODE_CHEAT = 4
+            # 翻转棋子
+            directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+            for dx, dy in directions:
+                flipped_count += self._flip_pieces_in_direction(row, col, dx, dy, player)
 
         move.flipped_count = flipped_count
         self.moves_history.append(move)
@@ -107,7 +110,11 @@ class GameState:
         # 更新游戏状态
         self.move_count += 1
         self._update_piece_counts()
-        self._switch_player()
+
+        # 在作弊模式下不切换玩家
+        if self.game_mode != 4:
+            self._switch_player()
+
         self._check_game_over()
 
         return True
@@ -120,10 +127,15 @@ class GameState:
         if self.board[row][col] != PieceType.EMPTY:
             return False
 
+        # 作弊模式: 只要位置为空即可（自由放置，跳过状态检查）
+        if self.game_mode == 4:  # GAME_MODE_CHEAT = 4
+            return True
+
+        # 正常模式: 必须是游戏进行中状态
         if self.status != GameStatus.PLAYING:
             return False
 
-        # 检查是否能翻转对手棋子
+        # 正常模式: 检查是否能翻转对手棋子
         directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
         for dx, dy in directions:
             if self._can_flip_in_direction(row, col, dx, dy, player):
@@ -207,20 +219,35 @@ class GameState:
 
     def _check_game_over(self):
         """检查游戏是否结束"""
-        if self.black_count + self.white_count == 64:
+        total_pieces = self.black_count + self.white_count
+        logger.info(f"[GAME_CHECK] 检查游戏结束: 总棋子={total_pieces}/64, 黑={self.black_count}, 白={self.white_count}")
+
+        if total_pieces == 64:
+            logger.info("[GAME_CHECK] ✅ 棋盘已满，游戏结束")
             self._end_game()
         elif not self.get_valid_moves(PieceType.BLACK) and not self.get_valid_moves(PieceType.WHITE):
+            logger.info("[GAME_CHECK] ✅ 双方无合法走法，游戏结束")
             self._end_game()
+        else:
+            logger.info("[GAME_CHECK] ❌ 游戏继续进行")
 
     def _end_game(self):
         """结束游戏"""
+        logger.info(f"[GAME_END] ========== 游戏结束 ==========")
+        logger.info(f"[GAME_END] 黑棋: {self.black_count}, 白棋: {self.white_count}")
+
         self.game_end_time = time.time()
         if self.black_count > self.white_count:
             self.status = GameStatus.BLACK_WIN
+            logger.info(f"[GAME_END] 结果: 黑棋获胜 (BLACK_WIN)")
         elif self.white_count > self.black_count:
             self.status = GameStatus.WHITE_WIN
+            logger.info(f"[GAME_END] 结果: 白棋获胜 (WHITE_WIN)")
         else:
             self.status = GameStatus.DRAW
+            logger.info(f"[GAME_END] 结果: 平局 (DRAW)")
+
+        logger.info(f"[GAME_END] 状态已设置: status={self.status}, status.value={self.status.value}")
 
     def get_game_duration(self) -> float:
         """获取游戏时长（秒）"""
@@ -273,22 +300,48 @@ class GameStateManager:
 
     def start_new_game(self):
         """开始新游戏"""
+        # 保存当前游戏模式（重要：在创建新对象前保存）
+        old_game_mode = self.current_game.game_mode
+
         # 保存当前游戏到历史记录
         if self.current_game.move_count > 0:
             self.games_history.append(self.current_game)
 
         # 创建新游戏
         self.current_game = GameState()
+        self.current_game.game_mode = old_game_mode  # 恢复游戏模式
         self.current_game.start_new_game()
+
+        # 如果是作弊模式，清空棋盘（覆盖标准开局）
+        if old_game_mode == 4:  # GAME_MODE_CHEAT = 4
+            self.current_game.board = [[PieceType.EMPTY for _ in range(8)] for _ in range(8)]
+            self.current_game.black_count = 0
+            self.current_game.white_count = 0
+            logger.info("作弊模式：清空棋盘，使用空白开局")
+
         self._notify_observers('game_started')
 
     def make_move(self, row: int, col: int) -> bool:
         """执行走法"""
+        logger.info(f"[MOVE] 执行走法: ({row},{col})")
+
         if self.current_game.make_move(row, col, self.current_game.current_player):
+            logger.info(f"[MOVE] ✅ 走法成功")
             self._notify_observers('move_made', {'row': row, 'col': col})
+
+            # 检查游戏是否结束
             if self.current_game.status != GameStatus.PLAYING:
+                logger.info(f"[MOVE] 🎮 检测到游戏结束! status={self.current_game.status}, "
+                           f"status.value={self.current_game.status.value}")
+                logger.info(f"[MOVE] 准备通知观察者: 'game_ended'")
                 self._notify_observers('game_ended')
+                logger.info(f"[MOVE] 已通知观察者")
+            else:
+                logger.info(f"[MOVE] 游戏继续，当前玩家: {self.current_game.current_player}")
+
             return True
+
+        logger.info(f"[MOVE] ❌ 走法失败")
         return False
 
     def update_board_state(self, board_data: bytes):
@@ -331,13 +384,25 @@ class GameStateManager:
                 self.current_game.status = GameStatus.PLAYING
 
             # ========== 5. 解析走法计数 (68-71字节, little-endian uint32) ==========
-            move_count = struct.unpack('<I', board_data[68:72])[0]
-            self.current_game.move_count = move_count
+            incoming_move_count = struct.unpack('<I', board_data[68:72])[0]
+
+            # ========== 版本号保护：拒绝旧状态包 ==========
+            if incoming_move_count < self.current_game.move_count:
+                logger.warning(
+                    f"⚠️ 拒绝旧状态包 | "
+                    f"接收move_count={incoming_move_count}, "
+                    f"当前move_count={self.current_game.move_count} | "
+                    f"原因：上位机状态更新，拒绝STM32的旧状态回传"
+                )
+                return  # 拒绝更新，保护上位机的新状态
+
+            # move_count >= current_move_count，接受更新
+            self.current_game.move_count = incoming_move_count
 
             # ========== 日志输出 ==========
             logger.info(f"✅ 游戏状态同步: 玩家 {old_player.name}→{self.current_game.current_player.name}, "
                        f"黑={self.current_game.black_count}, 白={self.current_game.white_count}, "
-                       f"步数={move_count}")
+                       f"步数={incoming_move_count}")
 
             # ========== 通知观察者 ==========
             self._notify_observers('board_updated')
@@ -395,11 +460,17 @@ class GameStateManager:
 
     def _notify_observers(self, event, data=None):
         """通知观察者"""
-        for callback in self.observers:
+        logger.info(f"[OBSERVER] 通知事件: event='{event}', 观察者数量={len(self.observers)}")
+
+        for i, callback in enumerate(self.observers):
             try:
+                logger.info(f"[OBSERVER] 调用观察者 #{i+1}")
                 callback(event, data)
+                logger.info(f"[OBSERVER] ✅ 观察者 #{i+1} 调用成功")
             except Exception as e:
-                print(f"Observer notification error: {e}")
+                logger.error(f"[OBSERVER] ❌ 观察者 #{i+1} 调用失败: {e}")
+                import traceback
+                traceback.print_exc()
 
     def get_statistics(self) -> Dict:
         """获取游戏统计信息"""

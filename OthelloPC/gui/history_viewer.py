@@ -288,7 +288,7 @@ class HistoryViewerWindow(tk.Toplevel):
             if self.history_manager.delete_record(self.selected_record.game_id):
                 self._load_history_list()
                 self.selected_record = None
-                messagebox.showinfo("成功", "历史记录已删除")
+
 
     def _jump_to_start(self):
         """跳转到开始"""

@@ -39,7 +39,87 @@
       "games_drawn": 1,
       "start_time": "2025-12-17T13:45:04.943736",
       "end_time": "2025-12-17T13:51:48.658757"
+    },
+    {
+      "total_score": 84,
+      "consecutive_losses": 0,
+      "games_played": 2,
+      "games_won": 2,
+      "games_lost": 0,
+      "games_drawn": 0,
+      "start_time": "2025-12-22T11:33:40.251777",
+      "end_time": "2025-12-22T11:36:55.436490"
+    },
+    {
+      "total_score": 82,
+      "consecutive_losses": 0,
+      "games_played": 3,
+      "games_won": 2,
+      "games_lost": 1,
+      "games_drawn": 0,
+      "start_time": "2025-12-22T12:03:26.803361",
+      "end_time": "2025-12-22T12:08:47.269274"
+    },
+    {
+      "total_score": 0,
+      "consecutive_losses": 2,
+      "games_played": 2,
+      "games_won": 0,
+      "games_lost": 2,
+      "games_drawn": 0,
+      "start_time": "2025-12-22T12:25:58.065887",
+      "end_time": "2025-12-22T12:29:21.149568"
+    },
+    {
+      "total_score": 40,
+      "consecutive_losses": 1,
+      "games_played": 2,
+      "games_won": 1,
+      "games_lost": 1,
+      "games_drawn": 0,
+      "start_time": "2025-12-22T12:49:55.487342",
+      "end_time": "2025-12-22T12:53:54.415809"
+    },
+    {
+      "total_score": 94,
+      "consecutive_losses": 0,
+      "games_played": 2,
+      "games_won": 2,
+      "games_lost": 0,
+      "games_drawn": 0,
+      "start_time": "2025-12-22T15:06:26.274293",
+      "end_time": "2025-12-22T15:11:25.560148"
+    },
+    {
+      "total_score": 0,
+      "consecutive_losses": 1,
+      "games_played": 1,
+      "games_won": 0,
+      "games_lost": 1,
+      "games_drawn": 0,
+      "start_time": "2025-12-22T15:37:36.076688",
+      "end_time": "2025-12-22T15:42:56.610795"
+    },
+    {
+      "total_score": 58,
+      "consecutive_losses": 0,
+      "games_played": 1,
+      "games_won": 1,
+      "games_lost": 0,
+      "games_drawn": 0,
+      "start_time": "2025-12-22T16:09:52.012053",
+      "end_time": "2025-12-22T16:11:42.999061"
+    },
+    {
+      "total_score": 59,
+      "consecutive_losses": 0,
+      "games_played": 1,
+      "games_won": 1,
+      "games_lost": 0,
+      "games_drawn": 0,
+      "start_time": "2025-12-22T16:46:23.490877",
+      "end_time": "2025-12-22T16:48:40.576036"
     }
   ],
-  "last_updated": "2025-12-17T13:51:48.658792"
+  "last_updated": "2025-12-22T16:48:40.576058"
 }

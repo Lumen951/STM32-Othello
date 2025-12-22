@@ -25,7 +25,7 @@ from gui.history_viewer import HistoryViewerWindow
 from gui.leaderboard_window import LeaderboardWindow
 from gui.analysis_window import AnalysisReportWindow
 from communication.serial_handler import SerialHandler
-from game.game_state import GameStateManager, PieceType
+from game.game_state import GameStateManager, PieceType, GameStatus
 from game.score_manager import ScoreManager
 from game.leaderboard import Leaderboard
 from game.challenge_mode import ChallengeMode
@@ -166,6 +166,9 @@ class MainWindow:
             on_mode_change=self._on_game_mode_changed
         )
         self.control_panel.pack(fill='x', pady=(0, 10))
+
+        # 注册作弊模式颜色选择回调
+        self.control_panel.on_cheat_color_selected = self._on_cheat_color_selected
 
         # 分数显示面板
         self.score_panel = ScorePanel(
@@ -357,10 +360,18 @@ class MainWindow:
     def _new_game(self):
         """开始新游戏"""
         try:
+            # 开始新游戏（GameStateManager会保留game_mode）
             self.game_manager.start_new_game()
 
-            # 重置游戏模式标记为普通模式（除非之后被其他模式覆盖）
-            if not self.challenge_mode.is_active and not (self.timer_display and self.timer_display.winfo_ismapped()):
+            # 更新游戏模式标记
+            current_game_mode = self.game_manager.current_game.game_mode
+            if current_game_mode == 4:  # GAME_MODE_CHEAT
+                self._current_game_mode = 'cheat'
+            elif self.challenge_mode.is_active:
+                self._current_game_mode = 'challenge'
+            elif self.timer_display and self.timer_display.winfo_ismapped():
+                self._current_game_mode = 'timed'
+            else:
                 self._current_game_mode = 'normal'
 
             # 更新棋盘显示
@@ -372,7 +383,7 @@ class MainWindow:
             if self.serial_handler.is_connected():
                 self.serial_handler.send_new_game()
 
-            self.logger.info("开始新游戏")
+            self.logger.info(f"开始新游戏（模式: {self._current_game_mode}）")
 
         except Exception as e:
             self.logger.error(f"开始新游戏失败: {e}")
@@ -835,6 +846,8 @@ class MainWindow:
 
     def _on_game_state_changed(self, event, data=None):
         """游戏状态变化回调"""
+        self.logger.info(f"[CALLBACK] ========== 收到游戏状态变化: event='{event}' ==========")
+
         try:
             # 更新棋盘显示
             if self.game_board:
@@ -854,10 +867,15 @@ class MainWindow:
 
             # 检查游戏结束
             if event == 'game_ended':
+                self.logger.info(f"[CALLBACK] 🎮 game_ended 事件触发!")
+                self.logger.info(f"[CALLBACK] challenge_mode.is_active={self.challenge_mode.is_active}")
+
                 # 如果是闯关模式，先处理闯关逻辑
                 if self.challenge_mode.is_active:
+                    self.logger.info(f"[CALLBACK] 调用 _handle_challenge_game_end()")
                     self._handle_challenge_game_end()
                 else:
+                    self.logger.info(f"[CALLBACK] 调用 _on_game_ended() (普通模式)")
                     # 普通模式：调用原有的游戏结束处理
                     self._on_game_ended()
 
@@ -988,10 +1006,19 @@ class MainWindow:
 
         self.logger.info(f"游戏模式变化: 0x{mode:02X}")
 
-        if mode == 0x04:  # 作弊模式（棋盘编辑）
+        if mode == SerialProtocol.GAME_MODE_CHEAT:  # 0x04 作弊模式
             # 结束AI模式和计时模式
             self.is_vs_ai_mode = False
             self.ai_player = None
+            self._current_game_mode = 'cheat'
+
+            # 结束闯关模式（如果激活）
+            if self.challenge_mode.is_active:
+                self.challenge_mode.end_challenge()
+
+            # 隐藏闯关模式面板
+            if self.score_panel:
+                self.score_panel.show_challenge_mode(False)
 
             # 隐藏计时器
             if self.timer_display:
@@ -1001,19 +1028,31 @@ class MainWindow:
             if self.timed_mode.is_running():
                 self.timed_mode.stop()
 
-            self.logger.info("作弊模式已启动（棋盘编辑）")
-            messagebox.showinfo(
-                "作弊模式",
-                f"作弊模式已启动！\n\n"
-                f"您可以自由编辑棋盘\n"
-                f"设置任意棋局进行练习\n\n"
-                f"注意：此模式不会记录到历史和排行榜"
-            )
+            # 重置游戏状态并设置作弊模式
+            if self.game_manager and self.game_manager.current_game:
+                # 清空棋盘（作弊模式从空白棋盘开始）
+                self.game_manager.current_game.board = [[PieceType.EMPTY for _ in range(8)] for _ in range(8)]
+                self.game_manager.current_game.status = GameStatus.PLAYING  # 关键：设置为PLAYING状态
+                self.game_manager.current_game.game_mode = 4  # GAME_MODE_CHEAT
+                self.game_manager.current_game.current_player = PieceType.BLACK  # 默认黑棋
+                self.game_manager.current_game.black_count = 0
+                self.game_manager.current_game.white_count = 0
+                self.game_manager.current_game.move_count = 0
+
+                # 更新棋盘显示
+                if self.game_board:
+                    self.game_board.reset_board()
+
+            self.logger.info("作弊模式已启动 - 自由放置模式（空白棋盘）")
 
         elif mode == SerialProtocol.GAME_MODE_CHALLENGE:
             # 启动闯关模式（人机对抗）
             self.is_vs_ai_mode = True
             self._current_game_mode = 'challenge'  # 设置游戏模式标记
+
+            # 恢复正常游戏规则
+            if self.game_manager and self.game_manager.current_game:
+                self.game_manager.current_game.game_mode = 0  # NORMAL
 
             # 隐藏计时器
             if self.timer_display:
@@ -1054,6 +1093,10 @@ class MainWindow:
             self.is_vs_ai_mode = False
             self.ai_player = None
 
+            # 恢复正常游戏规则
+            if self.game_manager and self.game_manager.current_game:
+                self.game_manager.current_game.game_mode = 0  # NORMAL
+
             # 隐藏计时器
             if self.timer_display:
                 self.timer_display.hide()
@@ -1075,6 +1118,10 @@ class MainWindow:
             # 结束AI模式和闯关模式
             self.is_vs_ai_mode = False
             self.ai_player = None
+
+            # 恢复正常游戏规则
+            if self.game_manager and self.game_manager.current_game:
+                self.game_manager.current_game.game_mode = 0  # NORMAL
 
             if self.challenge_mode.is_active:
                 self.challenge_mode.end_challenge()
@@ -1099,6 +1146,23 @@ class MainWindow:
                 f"时间到将自动结束游戏！"
             )
 
+    def _on_cheat_color_selected(self, player_color: int):
+        """处理作弊模式颜色选择
+
+        Args:
+            player_color: 玩家颜色 (1=BLACK, 2=WHITE)
+        """
+        from game.game_state import PieceType
+
+        if self.game_manager and self.game_manager.current_game:
+            # 设置当前玩家为选定的颜色
+            self.game_manager.current_game.current_player = PieceType(player_color)
+            self.logger.info(f"作弊模式玩家颜色设置为: {PieceType(player_color).name}")
+
+            # 更新棋盘显示
+            if self.game_board:
+                self.game_board.update_board()
+
         else:
             # 其他模式：隐藏计时器
             if self.timer_display:
@@ -1118,6 +1182,15 @@ class MainWindow:
             self.logger.info(f"普通模式游戏已自动保存到历史记录: {record.game_id}")
         except Exception as e:
             self.logger.error(f"保存游戏历史失败: {e}")
+
+        # ✅ 新增：发送完整游戏状态到STM32（包含游戏结束标志）
+        if self.serial_handler.is_connected():
+            self.logger.info("🎮 游戏结束，发送完整状态到STM32...")
+            success = self.serial_handler.send_full_game_state(game_state)
+            if success:
+                self.logger.info("✅ 游戏结束状态已发送到STM32 (data[67]=1)")
+            else:
+                self.logger.error("❌ 发送游戏结束状态失败")
 
         # 确定胜负
         if game_state.status.value == 1:  # BLACK_WIN
@@ -1146,6 +1219,15 @@ class MainWindow:
             self.logger.info(f"闯关模式游戏已自动保存到历史记录: {record.game_id}")
         except Exception as e:
             self.logger.error(f"保存闯关模式游戏历史失败: {e}")
+
+        # ✅ 新增：发送完整游戏状态到STM32（包含游戏结束标志）
+        if self.serial_handler.is_connected():
+            self.logger.info("🎮 游戏结束，发送完整状态到STM32...")
+            success = self.serial_handler.send_full_game_state(game_state)
+            if success:
+                self.logger.info("✅ 游戏结束状态已发送到STM32 (data[67]=1)")
+            else:
+                self.logger.error("❌ 发送游戏结束状态失败")
 
         # 处理闯关结果
         result = self.challenge_mode.process_game_result(
@@ -1283,8 +1365,8 @@ class MainWindow:
         )
         ok_btn.pack()
 
-        # 倒计时动画（3秒后自动关闭）
-        countdown = [3]
+        # 倒计时动画（12秒后自动关闭，与延迟时间匹配）
+        countdown = [12]
 
         def update_countdown():
             if countdown[0] > 0:
@@ -1335,8 +1417,11 @@ class MainWindow:
 
     def _start_next_challenge_game(self):
         """开始下一局闯关游戏"""
-        # 延迟3秒后自动开始（倒计时在对话框中显示）
-        self.root.after(3000, self._new_game)
+        # 延迟12秒后自动开始（确保STM32显示完成）
+        # STM32显示时间：WIN/LOSE(3-4s) + 清屏(0.5s) + 最终棋盘(5s) = 8.5-9.5秒
+        # 加上PC对话框显示时间(3s)和安全边距，设置为12秒
+        self.logger.info("[CHALLENGE] 将在12秒后开始下一局游戏...")
+        self.root.after(12000, self._new_game)
 
     def update_connection_status(self, status: str):
         """
@@ -1461,6 +1546,24 @@ class MainWindow:
             self.logger.info(f"计时模式游戏已自动保存到历史记录: {record.game_id}")
         except Exception as e:
             self.logger.error(f"保存计时模式游戏历史失败: {e}")
+
+        # ✅ 新增：发送完整游戏状态到STM32（包含游戏结束标志）
+        if self.serial_handler.is_connected():
+            self.logger.info("🎮 计时结束，发送完整状态到STM32...")
+            # 设置游戏结束状态
+            if game_state.status.value == 0:  # 如果游戏还在进行中
+                # 根据分数判定胜负
+                if game_state.black_count > game_state.white_count:
+                    game_state.status = GameStatus.BLACK_WIN
+                elif game_state.white_count > game_state.black_count:
+                    game_state.status = GameStatus.WHITE_WIN
+                else:
+                    game_state.status = GameStatus.DRAW
+            success = self.serial_handler.send_full_game_state(game_state)
+            if success:
+                self.logger.info("✅ 计时结束状态已发送到STM32 (data[67]=1)")
+            else:
+                self.logger.error("❌ 发送计时结束状态失败")
 
         # 显示提示并询问是否分析
         result = messagebox.askyesno(
