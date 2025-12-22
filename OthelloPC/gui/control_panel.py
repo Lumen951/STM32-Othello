@@ -16,13 +16,14 @@ import logging
 
 from gui.styles import DieterStyle, DieterWidgets
 from communication.serial_handler import SerialProtocol
+from game.player_manager import get_player_manager
 
 
 class ControlPanel(tk.Frame):
     """游戏控制面板"""
 
     def __init__(self, parent, serial_handler, on_state_change: Optional[Callable] = None,
-                 on_mode_change: Optional[Callable] = None):
+                 on_mode_change: Optional[Callable] = None, main_window=None):
         """
         初始化控制面板
 
@@ -31,13 +32,16 @@ class ControlPanel(tk.Frame):
             serial_handler: 串口处理器
             on_state_change: 状态变化回调函数
             on_mode_change: 模式变化回调函数
+            main_window: 主窗口引用（用于登录检查）
         """
         super().__init__(parent, bg=DieterStyle.COLORS['white'])
 
         self.serial_handler = serial_handler
         self.on_state_change = on_state_change
         self.on_mode_change = on_mode_change
+        self.main_window = main_window  # 保存主窗口引用
         self.logger = logging.getLogger(__name__)
+        self.player_manager = get_player_manager()
 
         # 当前游戏状态
         self.game_state = 'idle'  # idle, playing, paused, ended
@@ -346,7 +350,29 @@ class ControlPanel(tk.Frame):
             "计时模式": SerialProtocol.GAME_MODE_TIMED
         }
 
-        self.current_mode = mode_map.get(mode_name, SerialProtocol.GAME_MODE_NORMAL)
+        new_mode = mode_map.get(mode_name, SerialProtocol.GAME_MODE_NORMAL)
+
+        # 登录检查：闯关/计时模式需要登录
+        if mode_name in ["闯关模式", "计时模式"]:
+            if not self.player_manager.is_logged_in:
+                self.logger.warning(f"{mode_name}需要登录玩家")
+
+                # 恢复到之前的模式
+                old_mode_name = {
+                    SerialProtocol.GAME_MODE_NORMAL: "普通模式",
+                    SerialProtocol.GAME_MODE_CHEAT: "作弊模式",
+                    SerialProtocol.GAME_MODE_CHALLENGE: "闯关模式",
+                    SerialProtocol.GAME_MODE_TIMED: "计时模式"
+                }.get(self.current_mode, "普通模式")
+
+                self.mode_var.set(old_mode_name)
+
+                # 弹出登录窗口
+                if self.main_window:
+                    self.main_window.show_player_select_for_mode(mode_name, new_mode)
+                return
+
+        self.current_mode = new_mode
 
         # 显示/隐藏AI难度选择（仅闯关模式可见）
         if mode_name == "闯关模式":

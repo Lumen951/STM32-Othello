@@ -22,6 +22,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from gui.main_window import MainWindow
 from communication.serial_handler import SerialHandler
 from game.game_state import GameStateManager
+from game.player_manager import init_player_manager
 from utils.logger import Logger
 from utils.config import Config
 
@@ -48,6 +49,9 @@ class OthelloPC:
         """初始化所有组件"""
         try:
             self.logger.info("初始化STM32 Othello PC客户端...")
+
+            # 初始化玩家管理器（全局单例）
+            init_player_manager()
 
             # 创建主窗口
             self.root = tk.Tk()

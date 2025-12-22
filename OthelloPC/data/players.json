@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "users": [
+    {
+      "username": "Lumen",
+      "created_at": "2025-12-22 18:25:39",
+      "last_used": "2025-12-22 18:31:54",
+      "total_games": 1,
+      "favorite_mode": null
+    }
+  ],
+  "current_user": "Lumen",
+  "recent_users": [
+    "Lumen"
+  ]
+}

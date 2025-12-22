@@ -16,6 +16,7 @@ import logging
 
 from gui.styles import DieterStyle, DieterWidgets
 from game.leaderboard import Leaderboard
+from game.player_manager import get_player_manager
 
 
 class LeaderboardWindow(tk.Toplevel):
@@ -32,6 +33,7 @@ class LeaderboardWindow(tk.Toplevel):
         super().__init__(parent)
 
         self.leaderboard = leaderboard
+        self.player_manager = get_player_manager()
         self.logger = logging.getLogger(__name__)
 
         # 窗口设置
@@ -165,6 +167,9 @@ class LeaderboardWindow(tk.Toplevel):
         # 获取当前模式的排行榜
         board = self.leaderboard.get_board(self.current_mode)
 
+        # 获取当前登录玩家名称
+        current_player = self.player_manager.current_player if self.player_manager.is_logged_in else None
+
         # 填充数据
         for i, entry in enumerate(board):
             rank = i + 1
@@ -176,13 +181,21 @@ class LeaderboardWindow(tk.Toplevel):
             elif rank == 3:
                 medal = "🥉"
 
-            self.tree.insert('', 'end', values=(
+            # 插入行数据
+            item_id = self.tree.insert('', 'end', values=(
                 f"{medal} {rank}" if medal else str(rank),
                 entry.player_name,
                 f"{entry.score}分",
                 f"{entry.duration:.1f}秒",
                 entry.date_str
             ))
+
+            # 高亮当前登录玩家的记录
+            if current_player and entry.player_name == current_player:
+                self.tree.item(item_id, tags=('current_player',))
+
+        # 配置高亮样式（金色背景）
+        self.tree.tag_configure('current_player', background='#FFD700', foreground='#000000')
 
         # 更新统计信息
         self._update_statistics()

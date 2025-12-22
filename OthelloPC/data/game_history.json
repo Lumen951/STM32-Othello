@@ -1,8 +1,1231 @@
 {
   "version": "1.0",
-  "last_updated": "2025-12-22 17:29:41",
-  "total_records": 51,
+  "last_updated": "2025-12-22 18:33:29",
+  "total_records": 55,
   "records": [
+    {
+      "board": [
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          2,
+          2,
+          2,
+          2,
+          1,
+          2
+        ],
+        [
+          1,
+          1,
+          1,
+          2,
+          2,
+          1,
+          1,
+          2
+        ],
+        [
+          1,
+          1,
+          1,
+          2,
+          1,
+          2,
+          2,
+          2
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          2,
+          2,
+          1,
+          2
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          2,
+          2,
+          2,
+          2
+        ],
+        [
+          2,
+          1,
+          1,
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        [
+          1,
+          1,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      ],
+      "current_player": 1,
+      "black_count": 31,
+      "white_count": 32,
+      "status": 2,
+      "move_count": 59,
+      "game_start_time": 1766399522.323501,
+      "game_end_time": 1766399609.7382042,
+      "moves": [
+        {
+          "row": 3,
+          "col": 5,
+          "player": 1,
+          "timestamp": 1766399522.9545474,
+          "flipped": 1
+        },
+        {
+          "row": 2,
+          "col": 5,
+          "player": 2,
+          "timestamp": 1766399523.4602504,
+          "flipped": 1
+        },
+        {
+          "row": 2,
+          "col": 4,
+          "player": 1,
+          "timestamp": 1766399525.6499188,
+          "flipped": 1
+        },
+        {
+          "row": 4,
+          "col": 5,
+          "player": 2,
+          "timestamp": 1766399527.1818757,
+          "flipped": 2
+        },
+        {
+          "row": 5,
+          "col": 6,
+          "player": 1,
+          "timestamp": 1766399527.9216912,
+          "flipped": 1
+        },
+        {
+          "row": 2,
+          "col": 3,
+          "player": 2,
+          "timestamp": 1766399529.4475963,
+          "flipped": 2
+        },
+        {
+          "row": 1,
+          "col": 2,
+          "player": 1,
+          "timestamp": 1766399530.3032568,
+          "flipped": 1
+        },
+        {
+          "row": 5,
+          "col": 5,
+          "player": 2,
+          "timestamp": 1766399531.8232708,
+          "flipped": 1
+        },
+        {
+          "row": 1,
+          "col": 4,
+          "player": 1,
+          "timestamp": 1766399534.5432913,
+          "flipped": 1
+        },
+        {
+          "row": 0,
+          "col": 1,
+          "player": 2,
+          "timestamp": 1766399536.059631,
+          "flipped": 3
+        },
+        {
+          "row": 2,
+          "col": 2,
+          "player": 1,
+          "timestamp": 1766399537.474372,
+          "flipped": 1
+        },
+        {
+          "row": 2,
+          "col": 1,
+          "player": 2,
+          "timestamp": 1766399538.9946492,
+          "flipped": 3
+        },
+        {
+          "row": 3,
+          "col": 6,
+          "player": 1,
+          "timestamp": 1766399540.0022323,
+          "flipped": 1
+        },
+        {
+          "row": 1,
+          "col": 5,
+          "player": 2,
+          "timestamp": 1766399541.5233395,
+          "flipped": 1
+        },
+        {
+          "row": 3,
+          "col": 2,
+          "player": 1,
+          "timestamp": 1766399543.887407,
+          "flipped": 4
+        },
+        {
+          "row": 1,
+          "col": 3,
+          "player": 2,
+          "timestamp": 1766399545.4041717,
+          "flipped": 3
+        },
+        {
+          "row": 0,
+          "col": 2,
+          "player": 1,
+          "timestamp": 1766399546.5888507,
+          "flipped": 4
+        },
+        {
+          "row": 3,
+          "col": 7,
+          "player": 2,
+          "timestamp": 1766399548.1057417,
+          "flipped": 3
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "player": 1,
+          "timestamp": 1766399549.093779,
+          "flipped": 1
+        },
+        {
+          "row": 1,
+          "col": 1,
+          "player": 2,
+          "timestamp": 1766399550.6167798,
+          "flipped": 3
+        },
+        {
+          "row": 0,
+          "col": 0,
+          "player": 1,
+          "timestamp": 1766399551.6421497,
+          "flipped": 1
+        },
+        {
+          "row": 3,
+          "col": 1,
+          "player": 2,
+          "timestamp": 1766399553.1641088,
+          "flipped": 2
+        },
+        {
+          "row": 4,
+          "col": 6,
+          "player": 1,
+          "timestamp": 1766399555.5421867,
+          "flipped": 1
+        },
+        {
+          "row": 5,
+          "col": 7,
+          "player": 2,
+          "timestamp": 1766399557.0530148,
+          "flipped": 4
+        },
+        {
+          "row": 6,
+          "col": 7,
+          "player": 1,
+          "timestamp": 1766399557.7687538,
+          "flipped": 5
+        },
+        {
+          "row": 5,
+          "col": 4,
+          "player": 2,
+          "timestamp": 1766399559.293742,
+          "flipped": 1
+        },
+        {
+          "row": 4,
+          "col": 7,
+          "player": 1,
+          "timestamp": 1766399563.7987506,
+          "flipped": 1
+        },
+        {
+          "row": 7,
+          "col": 7,
+          "player": 2,
+          "timestamp": 1766399565.3314278,
+          "flipped": 3
+        },
+        {
+          "row": 6,
+          "col": 6,
+          "player": 1,
+          "timestamp": 1766399566.102491,
+          "flipped": 5
+        },
+        {
+          "row": 6,
+          "col": 5,
+          "player": 2,
+          "timestamp": 1766399567.6281955,
+          "flipped": 3
+        },
+        {
+          "row": 6,
+          "col": 4,
+          "player": 1,
+          "timestamp": 1766399569.822353,
+          "flipped": 1
+        },
+        {
+          "row": 7,
+          "col": 4,
+          "player": 2,
+          "timestamp": 1766399571.3527627,
+          "flipped": 4
+        },
+        {
+          "row": 0,
+          "col": 6,
+          "player": 1,
+          "timestamp": 1766399572.0510066,
+          "flipped": 2
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "player": 2,
+          "timestamp": 1766399573.5674531,
+          "flipped": 2
+        },
+        {
+          "row": 0,
+          "col": 5,
+          "player": 1,
+          "timestamp": 1766399574.2016656,
+          "flipped": 1
+        },
+        {
+          "row": 0,
+          "col": 4,
+          "player": 2,
+          "timestamp": 1766399575.7211194,
+          "flipped": 2
+        },
+        {
+          "row": 0,
+          "col": 3,
+          "player": 1,
+          "timestamp": 1766399576.6121547,
+          "flipped": 2
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "player": 2,
+          "timestamp": 1766399578.1475115,
+          "flipped": 1
+        },
+        {
+          "row": 4,
+          "col": 0,
+          "player": 1,
+          "timestamp": 1766399579.27967,
+          "flipped": 4
+        },
+        {
+          "row": 1,
+          "col": 6,
+          "player": 2,
+          "timestamp": 1766399580.7979636,
+          "flipped": 1
+        },
+        {
+          "row": 2,
+          "col": 6,
+          "player": 1,
+          "timestamp": 1766399582.3593976,
+          "flipped": 4
+        },
+        {
+          "row": 2,
+          "col": 7,
+          "player": 2,
+          "timestamp": 1766399583.8839662,
+          "flipped": 5
+        },
+        {
+          "row": 4,
+          "col": 2,
+          "player": 1,
+          "timestamp": 1766399586.0024676,
+          "flipped": 3
+        },
+        {
+          "row": 4,
+          "col": 1,
+          "player": 2,
+          "timestamp": 1766399587.5289676,
+          "flipped": 3
+        },
+        {
+          "row": 5,
+          "col": 0,
+          "player": 1,
+          "timestamp": 1766399588.9699965,
+          "flipped": 4
+        },
+        {
+          "row": 1,
+          "col": 7,
+          "player": 2,
+          "timestamp": 1766399590.4870057,
+          "flipped": 5
+        },
+        {
+          "row": 7,
+          "col": 6,
+          "player": 1,
+          "timestamp": 1766399592.5333295,
+          "flipped": 9
+        },
+        {
+          "row": 5,
+          "col": 3,
+          "player": 2,
+          "timestamp": 1766399594.0508618,
+          "flipped": 4
+        },
+        {
+          "row": 5,
+          "col": 2,
+          "player": 1,
+          "timestamp": 1766399595.1585007,
+          "flipped": 7
+        },
+        {
+          "row": 5,
+          "col": 1,
+          "player": 2,
+          "timestamp": 1766399596.686642,
+          "flipped": 7
+        },
+        {
+          "row": 7,
+          "col": 3,
+          "player": 1,
+          "timestamp": 1766399599.4406714,
+          "flipped": 2
+        },
+        {
+          "row": 7,
+          "col": 5,
+          "player": 2,
+          "timestamp": 1766399600.9712842,
+          "flipped": 5
+        },
+        {
+          "row": 6,
+          "col": 3,
+          "player": 1,
+          "timestamp": 1766399602.0547888,
+          "flipped": 5
+        },
+        {
+          "row": 7,
+          "col": 2,
+          "player": 2,
+          "timestamp": 1766399603.5808449,
+          "flipped": 5
+        },
+        {
+          "row": 6,
+          "col": 2,
+          "player": 1,
+          "timestamp": 1766399604.953478,
+          "flipped": 1
+        },
+        {
+          "row": 6,
+          "col": 1,
+          "player": 2,
+          "timestamp": 1766399606.4683852,
+          "flipped": 3
+        },
+        {
+          "row": 7,
+          "col": 0,
+          "player": 1,
+          "timestamp": 1766399607.174718,
+          "flipped": 1
+        },
+        {
+          "row": 6,
+          "col": 0,
+          "player": 2,
+          "timestamp": 1766399608.691282,
+          "flipped": 1
+        },
+        {
+          "row": 7,
+          "col": 1,
+          "player": 1,
+          "timestamp": 1766399609.72904,
+          "flipped": 7
+        }
+      ],
+      "game_id": "20251222_183329",
+      "timestamp": 1766399609.79767,
+      "winner": "white",
+      "duration": 87.41470313072205,
+      "game_mode": "challenge"
+    },
+    {
+      "board": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          1,
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          2,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "current_player": 1,
+      "black_count": 2,
+      "white_count": 2,
+      "status": 0,
+      "move_count": 0,
+      "game_start_time": 1766399207.5993347,
+      "game_end_time": null,
+      "moves": [],
+      "game_id": "20251222_182725",
+      "timestamp": 1766399245.032831,
+      "winner": "draw",
+      "duration": 37.43349838256836,
+      "game_mode": "challenge"
+    },
+    {
+      "board": [
+        [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        [
+          2,
+          2,
+          2,
+          2,
+          1,
+          2,
+          1,
+          2
+        ],
+        [
+          2,
+          2,
+          2,
+          1,
+          2,
+          1,
+          1,
+          2
+        ],
+        [
+          2,
+          2,
+          1,
+          2,
+          2,
+          2,
+          1,
+          2
+        ],
+        [
+          2,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          2
+        ]
+      ],
+      "current_player": 1,
+      "black_count": 13,
+      "white_count": 51,
+      "status": 2,
+      "move_count": 60,
+      "game_start_time": 1766399144.642655,
+      "game_end_time": 1766399195.4000885,
+      "moves": [
+        {
+          "row": 3,
+          "col": 5,
+          "player": 1,
+          "timestamp": 1766399145.5211625,
+          "flipped": 1
+        },
+        {
+          "row": 2,
+          "col": 5,
+          "player": 2,
+          "timestamp": 1766399146.142123,
+          "flipped": 1
+        },
+        {
+          "row": 2,
+          "col": 4,
+          "player": 1,
+          "timestamp": 1766399146.7783847,
+          "flipped": 1
+        },
+        {
+          "row": 4,
+          "col": 5,
+          "player": 2,
+          "timestamp": 1766399147.0435965,
+          "flipped": 2
+        },
+        {
+          "row": 4,
+          "col": 6,
+          "player": 1,
+          "timestamp": 1766399147.6193829,
+          "flipped": 1
+        },
+        {
+          "row": 2,
+          "col": 3,
+          "player": 2,
+          "timestamp": 1766399147.6546135,
+          "flipped": 3
+        },
+        {
+          "row": 1,
+          "col": 5,
+          "player": 1,
+          "timestamp": 1766399148.5340993,
+          "flipped": 1
+        },
+        {
+          "row": 1,
+          "col": 6,
+          "player": 2,
+          "timestamp": 1766399149.112502,
+          "flipped": 1
+        },
+        {
+          "row": 1,
+          "col": 7,
+          "player": 1,
+          "timestamp": 1766399149.7260334,
+          "flipped": 1
+        },
+        {
+          "row": 5,
+          "col": 7,
+          "player": 2,
+          "timestamp": 1766399150.0492268,
+          "flipped": 2
+        },
+        {
+          "row": 4,
+          "col": 2,
+          "player": 1,
+          "timestamp": 1766399150.947832,
+          "flipped": 2
+        },
+        {
+          "row": 0,
+          "col": 5,
+          "player": 2,
+          "timestamp": 1766399151.2411675,
+          "flipped": 1
+        },
+        {
+          "row": 2,
+          "col": 6,
+          "player": 1,
+          "timestamp": 1766399151.8714414,
+          "flipped": 1
+        },
+        {
+          "row": 2,
+          "col": 7,
+          "player": 2,
+          "timestamp": 1766399152.4582198,
+          "flipped": 4
+        },
+        {
+          "row": 4,
+          "col": 7,
+          "player": 1,
+          "timestamp": 1766399152.974452,
+          "flipped": 4
+        },
+        {
+          "row": 5,
+          "col": 3,
+          "player": 2,
+          "timestamp": 1766399153.3877025,
+          "flipped": 3
+        },
+        {
+          "row": 3,
+          "col": 7,
+          "player": 1,
+          "timestamp": 1766399153.9115043,
+          "flipped": 1
+        },
+        {
+          "row": 0,
+          "col": 7,
+          "player": 2,
+          "timestamp": 1766399154.4886785,
+          "flipped": 4
+        },
+        {
+          "row": 0,
+          "col": 6,
+          "player": 1,
+          "timestamp": 1766399155.0167823,
+          "flipped": 3
+        },
+        {
+          "row": 1,
+          "col": 4,
+          "player": 2,
+          "timestamp": 1766399155.4289546,
+          "flipped": 2
+        },
+        {
+          "row": 1,
+          "col": 2,
+          "player": 1,
+          "timestamp": 1766399155.8932042,
+          "flipped": 2
+        },
+        {
+          "row": 3,
+          "col": 2,
+          "player": 2,
+          "timestamp": 1766399156.5287023,
+          "flipped": 3
+        },
+        {
+          "row": 2,
+          "col": 2,
+          "player": 1,
+          "timestamp": 1766399157.1970742,
+          "flipped": 1
+        },
+        {
+          "row": 3,
+          "col": 1,
+          "player": 2,
+          "timestamp": 1766399157.4067621,
+          "flipped": 2
+        },
+        {
+          "row": 4,
+          "col": 0,
+          "player": 1,
+          "timestamp": 1766399158.1875656,
+          "flipped": 1
+        },
+        {
+          "row": 0,
+          "col": 2,
+          "player": 2,
+          "timestamp": 1766399158.7112803,
+          "flipped": 2
+        },
+        {
+          "row": 0,
+          "col": 1,
+          "player": 1,
+          "timestamp": 1766399159.393094,
+          "flipped": 3
+        },
+        {
+          "row": 5,
+          "col": 5,
+          "player": 2,
+          "timestamp": 1766399159.6994176,
+          "flipped": 2
+        },
+        {
+          "row": 2,
+          "col": 1,
+          "player": 1,
+          "timestamp": 1766399160.3010995,
+          "flipped": 1
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "player": 2,
+          "timestamp": 1766399160.9015164,
+          "flipped": 4
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "player": 1,
+          "timestamp": 1766399161.442955,
+          "flipped": 4
+        },
+        {
+          "row": 5,
+          "col": 0,
+          "player": 2,
+          "timestamp": 1766399161.8152392,
+          "flipped": 2
+        },
+        {
+          "row": 1,
+          "col": 1,
+          "player": 1,
+          "timestamp": 1766399162.368255,
+          "flipped": 1
+        },
+        {
+          "row": 0,
+          "col": 0,
+          "player": 2,
+          "timestamp": 1766399162.9552157,
+          "flipped": 4
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "player": 1,
+          "timestamp": 1766399163.3844051,
+          "flipped": 1
+        },
+        {
+          "row": 4,
+          "col": 1,
+          "player": 2,
+          "timestamp": 1766399163.8796358,
+          "flipped": 4
+        },
+        {
+          "row": 0,
+          "col": 4,
+          "player": 1,
+          "timestamp": 1766399164.3143914,
+          "flipped": 3
+        },
+        {
+          "row": 0,
+          "col": 3,
+          "player": 2,
+          "timestamp": 1766399164.9005818,
+          "flipped": 5
+        },
+        {
+          "row": 6,
+          "col": 0,
+          "player": 1,
+          "timestamp": 1766399166.8725202,
+          "flipped": 4
+        },
+        {
+          "row": 7,
+          "col": 0,
+          "player": 2,
+          "timestamp": 1766399168.3955085,
+          "flipped": 6
+        },
+        {
+          "row": 5,
+          "col": 2,
+          "player": 1,
+          "timestamp": 1766399169.0626576,
+          "flipped": 1
+        },
+        {
+          "row": 6,
+          "col": 1,
+          "player": 2,
+          "timestamp": 1766399170.5819826,
+          "flipped": 3
+        },
+        {
+          "row": 5,
+          "col": 1,
+          "player": 1,
+          "timestamp": 1766399171.2231274,
+          "flipped": 2
+        },
+        {
+          "row": 6,
+          "col": 2,
+          "player": 2,
+          "timestamp": 1766399172.7544024,
+          "flipped": 1
+        },
+        {
+          "row": 6,
+          "col": 4,
+          "player": 1,
+          "timestamp": 1766399173.3461785,
+          "flipped": 1
+        },
+        {
+          "row": 7,
+          "col": 5,
+          "player": 2,
+          "timestamp": 1766399174.8697798,
+          "flipped": 3
+        },
+        {
+          "row": 6,
+          "col": 6,
+          "player": 1,
+          "timestamp": 1766399175.385438,
+          "flipped": 2
+        },
+        {
+          "row": 7,
+          "col": 7,
+          "player": 2,
+          "timestamp": 1766399176.8963032,
+          "flipped": 4
+        },
+        {
+          "row": 5,
+          "col": 4,
+          "player": 1,
+          "timestamp": 1766399178.309213,
+          "flipped": 2
+        },
+        {
+          "row": 6,
+          "col": 5,
+          "player": 2,
+          "timestamp": 1766399179.8289452,
+          "flipped": 1
+        },
+        {
+          "row": 3,
+          "col": 6,
+          "player": 1,
+          "timestamp": 1766399181.5420015,
+          "flipped": 1
+        },
+        {
+          "row": 1,
+          "col": 3,
+          "player": 2,
+          "timestamp": 1766399183.061288,
+          "flipped": 2
+        },
+        {
+          "row": 5,
+          "col": 6,
+          "player": 1,
+          "timestamp": 1766399183.7248354,
+          "flipped": 2
+        },
+        {
+          "row": 6,
+          "col": 7,
+          "player": 2,
+          "timestamp": 1766399185.2487652,
+          "flipped": 3
+        },
+        {
+          "row": 6,
+          "col": 3,
+          "player": 1,
+          "timestamp": 1766399186.1623442,
+          "flipped": 2
+        },
+        {
+          "row": 7,
+          "col": 2,
+          "player": 2,
+          "timestamp": 1766399187.67691,
+          "flipped": 4
+        },
+        {
+          "row": 7,
+          "col": 3,
+          "player": 1,
+          "timestamp": 1766399188.7274065,
+          "flipped": 2
+        },
+        {
+          "row": 7,
+          "col": 4,
+          "player": 2,
+          "timestamp": 1766399190.253089,
+          "flipped": 2
+        },
+        {
+          "row": 7,
+          "col": 6,
+          "player": 1,
+          "timestamp": 1766399191.2645464,
+          "flipped": 2
+        },
+        {
+          "row": 7,
+          "col": 1,
+          "player": 1,
+          "timestamp": 1766399195.3965979,
+          "flipped": 6
+        }
+      ],
+      "game_id": "20251222_182635",
+      "timestamp": 1766399195.468545,
+      "winner": "white",
+      "duration": 50.75743365287781,
+      "game_mode": "challenge"
+    },
+    {
+      "board": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          1,
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          2,
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "current_player": 1,
+      "black_count": 2,
+      "white_count": 2,
+      "status": 0,
+      "move_count": 0,
+      "game_start_time": 1766399128.689894,
+      "game_end_time": null,
+      "moves": [],
+      "game_id": "20251222_182531",
+      "timestamp": 1766399131.790742,
+      "winner": "draw",
+      "duration": 3.100851058959961,
+      "game_mode": "normal"
+    },
     {
       "board": [
         [

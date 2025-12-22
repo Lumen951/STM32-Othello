@@ -24,6 +24,7 @@ from gui.serial_settings_dialog import SerialSettingsDialog
 from gui.history_viewer import HistoryViewerWindow
 from gui.leaderboard_window import LeaderboardWindow
 from gui.analysis_window import AnalysisReportWindow
+from gui.player_select_window import PlayerSelectWindow
 from communication.serial_handler import SerialHandler
 from game.game_state import GameStateManager, PieceType, GameStatus
 from game.score_manager import ScoreManager
@@ -31,6 +32,7 @@ from game.leaderboard import Leaderboard
 from game.challenge_mode import ChallengeMode
 from game.timed_mode import TimedModeManager
 from game.simple_ai import AIPlayer
+from game.player_manager import get_player_manager
 from data.game_history import GameHistoryManager
 from analysis.deepseek_client import DeepSeekClient
 
@@ -71,6 +73,9 @@ class MainWindow:
 
         # 排行榜管理器
         self.leaderboard = Leaderboard()
+
+        # 玩家管理器
+        self.player_manager = get_player_manager()
 
         # 闯关模式管理器
         self.challenge_mode = ChallengeMode()
@@ -135,6 +140,19 @@ class MainWindow:
         )
         self.status_label.pack(side='left', padx=(10, 0))
 
+        # 登录状态显示（右侧）
+        self.player_status_label = DieterWidgets.create_label(
+            control_frame, "游客模式", 'small'
+        )
+        self.player_status_label.pack(side='right')
+
+        # 登录/切换按钮
+        self.login_btn = DieterWidgets.create_button(
+            control_frame, "登录", self._show_player_login, 'secondary'
+        )
+        self.login_btn.pack(side='right', padx=(0, 10))
+        self._update_player_status_display()
+
         # === 状态显示面板（棋盘格样式）===
         self._create_status_grid(left_frame)
 
@@ -163,7 +181,8 @@ class MainWindow:
             right_frame,
             self.serial_handler,
             on_state_change=self._on_game_control_state_changed,
-            on_mode_change=self._on_game_mode_changed
+            on_mode_change=self._on_game_mode_changed,
+            main_window=self  # 传入主窗口引用
         )
         self.control_panel.pack(fill='x', pady=(0, 10))
 
@@ -1173,15 +1192,21 @@ class MainWindow:
                 self.timed_mode.stop()
 
     def _on_game_ended(self):
-        """游戏结束处理（普通模式）"""
+        """游戏结束处理（普通模式/计时模式）"""
         game_state = self.game_manager.current_game
+
+        # 确定当前游戏模式
+        current_mode = self._current_game_mode
 
         # 自动保存游戏到历史记录
         try:
-            record = self.history_manager.add_game(game_state, game_mode='normal')
-            self.logger.info(f"普通模式游戏已自动保存到历史记录: {record.game_id}")
+            record = self.history_manager.add_game(game_state, game_mode=current_mode)
+            self.logger.info(f"{current_mode}模式游戏已自动保存到历史记录: {record.game_id}")
         except Exception as e:
             self.logger.error(f"保存游戏历史失败: {e}")
+
+        # 添加到排行榜
+        self._add_to_leaderboard(game_state, current_mode)
 
         # ✅ 新增：发送完整游戏状态到STM32（包含游戏结束标志）
         if self.serial_handler.is_connected():
@@ -1220,6 +1245,15 @@ class MainWindow:
         except Exception as e:
             self.logger.error(f"保存闯关模式游戏历史失败: {e}")
 
+        # 处理闯关结果（必须在添加排行榜之前，因为需要累计分数）
+        result = self.challenge_mode.process_game_result(
+            game_state.black_count,
+            game_state.white_count
+        )
+
+        # 添加到排行榜（使用闯关累计分数）
+        self._add_to_leaderboard(game_state, 'challenge')
+
         # ✅ 新增：发送完整游戏状态到STM32（包含游戏结束标志）
         if self.serial_handler.is_connected():
             self.logger.info("🎮 游戏结束，发送完整状态到STM32...")
@@ -1228,12 +1262,6 @@ class MainWindow:
                 self.logger.info("✅ 游戏结束状态已发送到STM32 (data[67]=1)")
             else:
                 self.logger.error("❌ 发送游戏结束状态失败")
-
-        # 处理闯关结果
-        result = self.challenge_mode.process_game_result(
-            game_state.black_count,
-            game_state.white_count
-        )
 
         # 显示本局结果
         self._show_challenge_result(game_state, result)
@@ -1681,5 +1709,123 @@ class MainWindow:
 
         except Exception as e:
             self.logger.error(f"处理模式变化失败: {e}")
+
+    # ==================== 玩家登录相关方法 ====================
+
+    def _show_player_login(self):
+        """显示玩家登录窗口"""
+        def on_confirm():
+            self._update_player_status_display()
+            self.logger.info(f"玩家已登录: {self.player_manager.current_player}")
+
+        PlayerSelectWindow(
+            parent=self.root,
+            title="选择或输入玩家名称",
+            on_confirm=on_confirm,
+            allow_skip=True
+        )
+
+    def _update_player_status_display(self):
+        """更新玩家登录状态显示"""
+        if self.player_manager.is_logged_in:
+            player_name = self.player_manager.current_player
+            self.player_status_label.config(text=f"玩家: {player_name}")
+            self.login_btn.config(text="切换")
+        else:
+            self.player_status_label.config(text="游客模式")
+            self.login_btn.config(text="登录")
+
+    def show_player_select_for_mode(self, mode_name: str, mode_code: int):
+        """为特定模式显示玩家选择窗口"""
+        from communication.serial_handler import SerialProtocol
+
+        def on_confirm():
+            self._update_player_status_display()
+            self.logger.info(f"玩家已登录: {self.player_manager.current_player}")
+
+            # 重新触发模式选择
+            mode_map = {
+                SerialProtocol.GAME_MODE_NORMAL: "普通模式",
+                SerialProtocol.GAME_MODE_CHEAT: "作弊模式",
+                SerialProtocol.GAME_MODE_CHALLENGE: "闯关模式",
+                SerialProtocol.GAME_MODE_TIMED: "计时模式"
+            }
+            self.control_panel.mode_var.set(mode_map.get(mode_code, "普通模式"))
+            self.control_panel._on_mode_changed()
+
+        PlayerSelectWindow(
+            parent=self.root,
+            title=f"{mode_name}需要选择玩家",
+            on_confirm=on_confirm,
+            allow_skip=False
+        )
+
+    def _add_to_leaderboard(self, game_state, game_mode: str):
+        """
+        添加游戏结果到排行榜
+
+        Args:
+            game_state: 游戏状态对象
+            game_mode: 游戏模式 ('normal', 'challenge', 'timed', 'cheat')
+        """
+        # 作弊模式不记录排行榜
+        if game_mode == 'cheat':
+            return
+
+        try:
+            # 确定赢家和得分
+            if game_state.black_count > game_state.white_count:
+                winner = 'black'
+                score = game_state.black_count
+            elif game_state.white_count > game_state.black_count:
+                winner = 'white'
+                score = game_state.white_count
+            else:
+                winner = 'draw'
+                score = game_state.black_count
+
+            # 根据模式确定玩家名称和分数
+            if game_mode == 'challenge':
+                # 闯关模式：使用登录用户名 + 累计分数
+                if not self.player_manager.is_logged_in:
+                    self.logger.warning("闯关模式结束但用户未登录，无法记录排行榜")
+                    return
+
+                player_name = self.player_manager.current_player
+                score = self.challenge_mode.get_stats().total_score
+
+            elif game_mode == 'timed':
+                # 计时模式：使用登录用户名 + 最终得分
+                if not self.player_manager.is_logged_in:
+                    self.logger.warning("计时模式结束但用户未登录，无法记录排行榜")
+                    return
+
+                player_name = self.player_manager.current_player
+                # score 已经是赢家的分数
+
+            elif game_mode == 'normal':
+                # 普通模式：使用固定名称
+                player_name = self.player_manager.get_display_name(game_mode, winner)
+                # score 已经是赢家的分数
+
+            else:
+                self.logger.warning(f"未知游戏模式: {game_mode}，不记录排行榜")
+                return
+
+            # 计算游戏时长
+            duration = game_state.get_game_duration()
+
+            # 添加到排行榜
+            self.leaderboard.add_entry(
+                player_name=player_name,
+                score=score,
+                game_mode=game_mode,
+                duration=duration
+            )
+
+            self.logger.info(f"✅ 已添加到排行榜: 玩家={player_name}, 模式={game_mode}, 分数={score}, 用时={duration:.1f}秒")
+
+        except Exception as e:
+            self.logger.error(f"添加到排行榜失败: {e}")
             import traceback
             traceback.print_exc()

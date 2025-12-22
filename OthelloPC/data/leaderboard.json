@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "last_updated": "2025-12-22 18:33:29",
+  "max_entries": 10,
+  "normal": [],
+  "challenge": [
+    {
+      "player_name": "Lumen",
+      "score": 64,
+      "game_mode": "challenge",
+      "duration": 99.0,
+      "timestamp": 1766396147.875465,
+      "date": "2025-12-22 17:35"
+    },
+    {
+      "player_name": "Lumen",
+      "score": 0,
+      "game_mode": "challenge",
+      "duration": 50.75743365287781,
+      "timestamp": 1766399195.495694,
+      "date": "2025-12-22 18:26"
+    },
+    {
+      "player_name": "Lumen",
+      "score": 0,
+      "game_mode": "challenge",
+      "duration": 87.41470313072205,
+      "timestamp": 1766399609.825372,
+      "date": "2025-12-22 18:33"
+    }
+  ],
+  "timed": []
+}
