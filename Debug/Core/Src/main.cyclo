@@ -1,6 +1,6 @@
 ../Core/Src/main.c:102:13:Convert_GameState_to_Protocol	5
 ../Core/Src/main.c:127:26:Send_GameState_Via_Protocol	1
-../Core/Src/main.c:139:5:main	8
+../Core/Src/main.c:139:5:main	7
 ../Core/Src/main.c:272:6:SystemClock_Config	3
 ../Core/Src/main.c:312:13:MX_TIM2_Init	6
 ../Core/Src/main.c:371:13:MX_USART1_UART_Init	2
@@ -12,11 +12,11 @@
 ../Core/Src/main.c:523:6:App_Main_Loop	5
 ../Core/Src/main.c:554:6:App_UpdateCursor	3
 ../Core/Src/main.c:576:6:App_DisplayGameBoard	8
-../Core/Src/main.c:616:6:App_ProcessKeyEvent	38
-../Core/Src/main.c:897:6:App_PrintGameHistory	6
+../Core/Src/main.c:616:6:App_ProcessKeyEvent	29
+../Core/Src/main.c:897:6:App_PrintGameHistory	3
 ../Core/Src/main.c:937:6:App_UpdateGameDisplay	3
-../Core/Src/main.c:958:6:App_HandleGameOver	15
+../Core/Src/main.c:958:6:App_HandleGameOver	12
 ../Core/Src/main.c:1099:6:Keypad_Key_Event_Handler	4
-../Core/Src/main.c:1149:6:Protocol_Command_Handler	42
+../Core/Src/main.c:1149:6:Protocol_Command_Handler	40
 ../Core/Src/main.c:1419:6:HAL_UART_RxCpltCallback	1
 ../Core/Src/main.c:1431:6:Error_Handler	1
