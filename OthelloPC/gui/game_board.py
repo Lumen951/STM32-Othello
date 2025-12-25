@@ -20,11 +20,15 @@ from gui.styles import DieterStyle, AppTheme
 class GameBoard(tk.Frame):
     """交互式游戏棋盘组件"""
 
-    def __init__(self, parent, game_state: GameState, on_move_callback: Optional[Callable] = None):
+    def __init__(self, parent, game_state: GameState, on_move_callback: Optional[Callable] = None,
+                 check_cheat_mode: Optional[Callable] = None,
+                 get_cheat_color: Optional[Callable] = None):
         super().__init__(parent, bg=DieterStyle.COLORS['white'])
 
         self.game_state = game_state
         self.on_move_callback = on_move_callback
+        self.check_cheat_mode = check_cheat_mode  # 新增：检查作弊模式的回调
+        self.get_cheat_color = get_cheat_color  # 新增：获取作弊模式选中颜色的回调
 
         # 棋盘配置
         self.board_size = DieterStyle.SIZES['board_size']
@@ -211,13 +215,23 @@ class GameBoard(tk.Frame):
         x2 = x1 + self.cell_size - 4
         y2 = y1 + self.cell_size - 4
 
-        # 检查是否是有效走法
-        if self.game_state.is_valid_move(row, col, self.game_state.current_player):
+        # ========== 新增：作弊模式下显示不同的悬停效果 ==========
+        is_cheat_mode = self.check_cheat_mode() if self.check_cheat_mode else False
+
+        if is_cheat_mode:
+            # 作弊模式：所有位置都显示为可下棋
             color = self.colors['hover_highlight']
             width = 3
+            is_valid = True
         else:
-            color = self.colors['invalid_move']
-            width = 2
+            # 正常模式：检查是否是有效走法
+            is_valid = self.game_state.is_valid_move(row, col, self.game_state.current_player)
+            if is_valid:
+                color = self.colors['hover_highlight']
+                width = 3
+            else:
+                color = self.colors['invalid_move']
+                width = 2
 
         self.canvas.create_rectangle(
             x1, y1, x2, y2,
@@ -227,15 +241,24 @@ class GameBoard(tk.Frame):
             tags='hover'
         )
 
-        # 如果是有效走法，绘制预览棋子
-        if self.game_state.is_valid_move(row, col, self.game_state.current_player):
+        # 如果是有效走法（或作弊模式），绘制预览棋子
+        if is_valid:
             x = col * self.cell_size + self.cell_size // 2
             y = row * self.cell_size + self.cell_size // 2
 
-            if self.game_state.current_player == PieceType.BLACK:
-                fill_color = self.colors['black_piece']
+            # 在作弊模式下使用选中的颜色，否则使用当前玩家颜色
+            if is_cheat_mode and self.get_cheat_color:
+                cheat_color = self.get_cheat_color()  # 获取作弊模式选中的颜色 (1=BLACK, 2=WHITE)
+                if cheat_color == 1:  # BLACK
+                    fill_color = self.colors['black_piece']
+                else:  # WHITE
+                    fill_color = self.colors['white_piece']
             else:
-                fill_color = self.colors['white_piece']
+                # 正常模式：使用当前玩家颜色
+                if self.game_state.current_player == PieceType.BLACK:
+                    fill_color = self.colors['black_piece']
+                else:
+                    fill_color = self.colors['white_piece']
 
             # 半透明预览效果
             self.canvas.create_oval(
@@ -259,10 +282,18 @@ class GameBoard(tk.Frame):
 
         # 检查坐标有效性
         if 0 <= row < 8 and 0 <= col < 8:
-            # 检查是否是有效走法
-            if self.game_state.is_valid_move(row, col, self.game_state.current_player):
+            # ========== 新增：作弊模式下跳过合法性检查 ==========
+            is_cheat_mode = self.check_cheat_mode() if self.check_cheat_mode else False
+
+            if is_cheat_mode:
+                # 作弊模式：允许点击任意位置
                 if self.on_move_callback:
                     self.on_move_callback(row, col)
+            else:
+                # 正常模式：检查是否是有效走法
+                if self.game_state.is_valid_move(row, col, self.game_state.current_player):
+                    if self.on_move_callback:
+                        self.on_move_callback(row, col)
 
     def _on_mouse_move(self, event):
         """处理鼠标移动事件"""

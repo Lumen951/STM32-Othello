@@ -58,7 +58,8 @@ typedef enum {
     CMD_MODE_SELECT    = 0x0D,     ///< Game mode selection (normal/challenge/timed)
     CMD_SCORE_UPDATE   = 0x0E,     ///< Score update notification
     CMD_TIMER_UPDATE   = 0x0F,     ///< Timer update notification
-    CMD_CHEAT_COLOR_SELECT = 0x10, ///< Cheat mode color selection
+    CMD_CHEAT_COLOR_SELECT = 0x10, ///< [DEPRECATED] Use CMD_CHEAT_TOGGLE instead
+    CMD_CHEAT_TOGGLE   = 0x11,     ///< Cheat mode toggle (overlay on current mode)
     CMD_ERROR          = 0xFF      ///< Error response
 } Protocol_Command_t;
 
@@ -179,8 +180,8 @@ typedef struct {
 typedef enum {
     GAME_MODE_NORMAL    = 0x01,     ///< Normal mode
     GAME_MODE_CHALLENGE = 0x02,     ///< Challenge mode (cumulative score)
-    GAME_MODE_TIMED     = 0x03,     ///< Timed mode (countdown timer)
-    GAME_MODE_CHEAT     = 0x04      ///< Cheat mode (free placement, no turn switching)
+    GAME_MODE_TIMED     = 0x03      ///< Timed mode (countdown timer)
+    // GAME_MODE_CHEAT (0x04) has been removed - cheat is now an overlay state
 } Game_Mode_t;
 
 /**
@@ -193,10 +194,23 @@ typedef struct {
 
 /**
  * @brief Cheat mode color selection data structure (for CMD_CHEAT_COLOR_SELECT)
+ * @deprecated Use Cheat_Toggle_Data_t with CMD_CHEAT_TOGGLE instead
  */
 typedef struct {
     uint8_t player_color;           ///< Selected color (1=BLACK, 2=WHITE)
 } Cheat_Color_Select_Data_t;
+
+/**
+ * @brief Cheat toggle data structure (for CMD_CHEAT_TOGGLE)
+ *
+ * This command enables/disables cheat mode as an overlay on the current game mode.
+ * When enabled, allows direct piece replacement at any position.
+ * When disabled, restores normal game logic without changing the base game mode.
+ */
+typedef struct {
+    uint8_t enable;                 ///< 1=Enable cheat overlay, 0=Disable cheat overlay
+    uint8_t selected_color;         ///< Selected piece color (1=BLACK, 2=WHITE)
+} Cheat_Toggle_Data_t;
 
 /**
  * @brief Score update data structure (for CMD_SCORE_UPDATE)

@@ -92,6 +92,10 @@ class MainWindow:
         # 当前游戏模式标记（用于保存历史记录）
         self._current_game_mode = 'normal'
 
+        # 作弊模式标志（叠加状态）
+        self._cheat_mode_enabled = False
+        self._cheat_selected_color = 1  # 1=BLACK, 2=WHITE
+
         # Connection verification
         self._connection_verified = False
         self._connection_timeout_count = 0
@@ -164,7 +168,9 @@ class MainWindow:
         self.game_board = GameBoard(
             board_container,
             self.game_manager.current_game,
-            on_move_callback=self._on_player_move
+            on_move_callback=self._on_player_move,
+            check_cheat_mode=lambda: self._cheat_mode_enabled,  # 新增：传入作弊模式检查函数
+            get_cheat_color=lambda: self._cheat_selected_color  # 新增：传入作弊模式颜色获取函数
         )
         self.game_board.pack(side='right')
 
@@ -384,9 +390,7 @@ class MainWindow:
 
             # 更新游戏模式标记
             current_game_mode = self.game_manager.current_game.game_mode
-            if current_game_mode == 4:  # GAME_MODE_CHEAT
-                self._current_game_mode = 'cheat'
-            elif self.challenge_mode.is_active:
+            if self.challenge_mode.is_active:
                 self._current_game_mode = 'challenge'
             elif self.timer_display and self.timer_display.winfo_ismapped():
                 self._current_game_mode = 'timed'
@@ -786,11 +790,57 @@ class MainWindow:
     def _on_player_move(self, row: int, col: int):
         """处理玩家走棋"""
         try:
+            game_state = self.game_manager.current_game
+
+            # ========== 作弊模式：直接放置棋子，不切换玩家 ==========
+            if self._cheat_mode_enabled:
+                # 使用当前选择的颜色（而非 game_state.current_player）
+                piece_color = PieceType(self._cheat_selected_color)
+
+                # 直接放置棋子（允许覆盖）
+                game_state.board[row][col] = piece_color
+
+                # 翻转对手棋子（调用翻转逻辑）
+                opponent = PieceType.WHITE if piece_color == PieceType.BLACK else PieceType.BLACK
+
+                directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+                for dx, dy in directions:
+                    game_state._flip_pieces_in_direction(row, col, dx, dy, piece_color)
+
+                # 更新棋子计数
+                game_state._update_piece_counts()
+
+                # ========== 新增：检查游戏是否结束 ==========
+                game_state._check_game_over()
+
+                # 如果游戏结束，触发游戏结束处理
+                if game_state.status.value != 0:  # 0 = PLAYING
+                    self.logger.info(f"作弊模式：游戏结束，状态={game_state.status.name}")
+                    self._on_game_ended()
+                # ========== 新增结束 ==========
+
+                # 不切换玩家（保持当前选择的颜色）
+
+                # 更新棋盘显示
+                if self.game_board:
+                    self.game_board.update_board()
+
+                # 更新状态显示
+                self._update_status_display()
+
+                # 发送到STM32
+                if self.serial_handler.is_connected():
+                    self.serial_handler.send_make_move(row, col, self._cheat_selected_color)
+                    self.logger.info(f"作弊模式下棋: {chr(ord('A') + col)}{row + 1}, 颜色={self._cheat_selected_color}")
+
+                return
+            # ========== 作弊模式逻辑结束 ==========
+
+            # ========== 正常模式逻辑 ==========
             # 在走棋前保存当前玩家（走棋后会切换）
-            current_player = self.game_manager.current_game.current_player.value
+            current_player = game_state.current_player.value
 
             # 验证走法是否有效（与STM32端逻辑一致）
-            game_state = self.game_manager.current_game
             if not game_state.is_valid_move(row, col, game_state.current_player):
                 self.logger.warning(f"无效走法: ({row},{col}) 玩家={current_player}, 不发送到STM32")
                 return
@@ -819,6 +869,8 @@ class MainWindow:
 
         except Exception as e:
             self.logger.error(f"处理玩家走棋失败: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _ai_make_move(self):
         """AI自动走棋"""
@@ -1025,46 +1077,7 @@ class MainWindow:
 
         self.logger.info(f"游戏模式变化: 0x{mode:02X}")
 
-        if mode == SerialProtocol.GAME_MODE_CHEAT:  # 0x04 作弊模式
-            # 结束AI模式和计时模式
-            self.is_vs_ai_mode = False
-            self.ai_player = None
-            self._current_game_mode = 'cheat'
-
-            # 结束闯关模式（如果激活）
-            if self.challenge_mode.is_active:
-                self.challenge_mode.end_challenge()
-
-            # 隐藏闯关模式面板
-            if self.score_panel:
-                self.score_panel.show_challenge_mode(False)
-
-            # 隐藏计时器
-            if self.timer_display:
-                self.timer_display.hide()
-
-            # 停止计时
-            if self.timed_mode.is_running():
-                self.timed_mode.stop()
-
-            # 重置游戏状态并设置作弊模式
-            if self.game_manager and self.game_manager.current_game:
-                # 清空棋盘（作弊模式从空白棋盘开始）
-                self.game_manager.current_game.board = [[PieceType.EMPTY for _ in range(8)] for _ in range(8)]
-                self.game_manager.current_game.status = GameStatus.PLAYING  # 关键：设置为PLAYING状态
-                self.game_manager.current_game.game_mode = 4  # GAME_MODE_CHEAT
-                self.game_manager.current_game.current_player = PieceType.BLACK  # 默认黑棋
-                self.game_manager.current_game.black_count = 0
-                self.game_manager.current_game.white_count = 0
-                self.game_manager.current_game.move_count = 0
-
-                # 更新棋盘显示
-                if self.game_board:
-                    self.game_board.reset_board()
-
-            self.logger.info("作弊模式已启动 - 自由放置模式（空白棋盘）")
-
-        elif mode == SerialProtocol.GAME_MODE_CHALLENGE:
+        if mode == SerialProtocol.GAME_MODE_CHALLENGE:
             # 启动闯关模式（人机对抗）
             self.is_vs_ai_mode = True
             self._current_game_mode = 'challenge'  # 设置游戏模式标记
@@ -1173,23 +1186,17 @@ class MainWindow:
         """
         from game.game_state import PieceType
 
-        if self.game_manager and self.game_manager.current_game:
-            # 设置当前玩家为选定的颜色
-            self.game_manager.current_game.current_player = PieceType(player_color)
-            self.logger.info(f"作弊模式玩家颜色设置为: {PieceType(player_color).name}")
+        # 保存作弊模式选择的颜色
+        self._cheat_selected_color = player_color
 
-            # 更新棋盘显示
+        if self.game_manager and self.game_manager.current_game:
+            # 不修改 game_state.current_player（避免影响正常模式）
+            # 只在 _on_player_move() 中使用 _cheat_selected_color
+            self.logger.info(f"作弊模式颜色设置为: {PieceType(player_color).name}")
+
+            # 更新棋盘显示（如果需要）
             if self.game_board:
                 self.game_board.update_board()
-
-        else:
-            # 其他模式：隐藏计时器
-            if self.timer_display:
-                self.timer_display.hide()
-
-            # 停止计时
-            if self.timed_mode.is_running():
-                self.timed_mode.stop()
 
     def _on_game_ended(self):
         """游戏结束处理（普通模式/计时模式）"""
@@ -1746,7 +1753,6 @@ class MainWindow:
             # 重新触发模式选择
             mode_map = {
                 SerialProtocol.GAME_MODE_NORMAL: "普通模式",
-                SerialProtocol.GAME_MODE_CHEAT: "作弊模式",
                 SerialProtocol.GAME_MODE_CHALLENGE: "闯关模式",
                 SerialProtocol.GAME_MODE_TIMED: "计时模式"
             }

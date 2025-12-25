@@ -1,9 +1,98 @@
 {
   "version": "1.0",
-  "last_updated": "2025-12-22 18:33:29",
+  "last_updated": "2025-12-25 11:40:10",
   "max_entries": 10,
-  "normal": [],
+  "normal": [
+    {
+      "player_name": "玩家2",
+      "score": 47,
+      "game_mode": "normal",
+      "duration": 153.66953229904175,
+      "timestamp": 1766628614.845621,
+      "date": "2025-12-25 10:10"
+    },
+    {
+      "player_name": "玩家1",
+      "score": 12,
+      "game_mode": "normal",
+      "duration": 24.730181455612183,
+      "timestamp": 1766594004.747673,
+      "date": "2025-12-25 00:33"
+    },
+    {
+      "player_name": "玩家2",
+      "score": 11,
+      "game_mode": "normal",
+      "duration": 5.693635702133179,
+      "timestamp": 1766632963.299128,
+      "date": "2025-12-25 11:22"
+    },
+    {
+      "player_name": "玩家2",
+      "score": 10,
+      "game_mode": "normal",
+      "duration": 17.083946704864502,
+      "timestamp": 1766596267.663603,
+      "date": "2025-12-25 01:11"
+    },
+    {
+      "player_name": "玩家2",
+      "score": 9,
+      "game_mode": "normal",
+      "duration": 10.094288349151611,
+      "timestamp": 1766596260.667396,
+      "date": "2025-12-25 01:11"
+    },
+    {
+      "player_name": "玩家2",
+      "score": 7,
+      "game_mode": "normal",
+      "duration": 6.640671014785767,
+      "timestamp": 1766633090.848904,
+      "date": "2025-12-25 11:24"
+    },
+    {
+      "player_name": "玩家2",
+      "score": 7,
+      "game_mode": "normal",
+      "duration": 8.147994041442871,
+      "timestamp": 1766631256.831029,
+      "date": "2025-12-25 10:54"
+    },
+    {
+      "player_name": "玩家1",
+      "score": 6,
+      "game_mode": "normal",
+      "duration": 3.0355117321014404,
+      "timestamp": 1766632984.6688,
+      "date": "2025-12-25 11:23"
+    },
+    {
+      "player_name": "玩家1",
+      "score": 6,
+      "game_mode": "normal",
+      "duration": 4.326154947280884,
+      "timestamp": 1766628219.399688,
+      "date": "2025-12-25 10:03"
+    },
+    {
+      "player_name": "玩家1",
+      "score": 6,
+      "game_mode": "normal",
+      "duration": 4.347976922988892,
+      "timestamp": 1766631233.125701,
+      "date": "2025-12-25 10:53"
+    }
+  ],
   "challenge": [
+    {
+      "player_name": "Lumen",
+      "score": 69,
+      "game_mode": "challenge",
+      "duration": 88.86938548088074,
+      "timestamp": 1766633776.052749,
+      "date": "2025-12-25 11:36"
+    },
     {
       "player_name": "Lumen",
       "score": 64,
@@ -11,6 +100,30 @@
       "duration": 99.0,
       "timestamp": 1766396147.875465,
       "date": "2025-12-22 17:35"
+    },
+    {
+      "player_name": "Lumen",
+      "score": 57,
+      "game_mode": "challenge",
+      "duration": 119.17675256729126,
+      "timestamp": 1766628421.312463,
+      "date": "2025-12-25 10:07"
+    },
+    {
+      "player_name": "Lumen",
+      "score": 34,
+      "game_mode": "challenge",
+      "duration": 84.8787853717804,
+      "timestamp": 1766633674.999397,
+      "date": "2025-12-25 11:34"
+    },
+    {
+      "player_name": "Lumen",
+      "score": 0,
+      "game_mode": "challenge",
+      "duration": 3.2851946353912354,
+      "timestamp": 1766628238.707791,
+      "date": "2025-12-25 10:03"
     },
     {
       "player_name": "Lumen",
@@ -27,6 +140,30 @@
       "duration": 87.41470313072205,
       "timestamp": 1766399609.825372,
       "date": "2025-12-22 18:33"
+    },
+    {
+      "player_name": "Lumen",
+      "score": 0,
+      "game_mode": "challenge",
+      "duration": 89.70425844192505,
+      "timestamp": 1766633331.057482,
+      "date": "2025-12-25 11:28"
+    },
+    {
+      "player_name": "Lumen",
+      "score": 0,
+      "game_mode": "challenge",
+      "duration": 92.83399748802185,
+      "timestamp": 1766631485.034439,
+      "date": "2025-12-25 10:58"
+    },
+    {
+      "player_name": "Lumen",
+      "score": 0,
+      "game_mode": "challenge",
+      "duration": 96.85124516487122,
+      "timestamp": 1766631380.031685,
+      "date": "2025-12-25 10:56"
     }
   ],
   "timed": []

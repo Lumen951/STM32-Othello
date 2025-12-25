@@ -7,6 +7,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "led_text.h"
+#include "debug_print.h"
 #include <string.h>
 #include <ctype.h>
 
@@ -208,14 +209,42 @@ LED_Text_Status_t LED_Text_Display_Sequential(const char* text, RGB_Color_t colo
 
     // Display each character sequentially
     for (uint8_t i = 0; i < text_len; i++) {
+        // === FIX: Wait for DMA to be idle before starting new character ===
+        uint16_t wait_count = 0;
+        while (WS2812B_IsBusy()) {
+            HAL_Delay(1);
+            wait_count++;
+            if (wait_count > 100) {  // Timeout after 100ms
+                DEBUG_INFO("[LED_TEXT] DMA busy timeout before char '%c'\r\n", text[i]);
+                return LED_TEXT_ERROR;
+            }
+        }
+
         // Clear display
         WS2812B_Clear();
 
         // Display single character centered
         LED_Text_DisplayChar(text[i], center_x, center_y, color);
 
-        // Update LED matrix
-        WS2812B_Update();
+        // === FIX: Retry WS2812B_Update() if DMA is busy ===
+        WS2812B_Status_t status;
+        uint8_t retry_count = 0;
+        do {
+            status = WS2812B_Update();
+
+            if (status == WS2812B_BUSY) {
+                HAL_Delay(1);  // Wait 1ms before retry
+                retry_count++;
+
+                if (retry_count > 10) {
+                    DEBUG_INFO("[LED_TEXT] Update retry limit exceeded for char '%c'\r\n", text[i]);
+                    return LED_TEXT_ERROR;
+                }
+            } else if (status != WS2812B_OK) {
+                DEBUG_INFO("[LED_TEXT] Update error for char '%c', status=%d\r\n", text[i], status);
+                return LED_TEXT_ERROR;
+            }
+        } while (status == WS2812B_BUSY);
 
         // Wait for specified duration
         HAL_Delay(letter_duration_ms);

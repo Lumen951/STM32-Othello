@@ -1,5 +1,5 @@
 ../Core/Src/debug_print.c:25:6:Debug_Init	4	static
-../Core/Src/debug_print.c:34:6:Debug_Printf	12	static
-../Core/Src/debug_print.c:67:6:Debug_Print_Raw	16	static
-../Core/Src/debug_print.c:93:6:Debug_Print_Hex	24	static
-../Core/Src/debug_print.c:124:6:Debug_Print_Banner	4	static
+../Core/Src/debug_print.c:34:6:Debug_Printf	292	static
+../Core/Src/debug_print.c:67:6:Debug_Print_Raw	24	static
+../Core/Src/debug_print.c:93:6:Debug_Print_Hex	288	static
+../Core/Src/debug_print.c:124:6:Debug_Print_Banner	8	static

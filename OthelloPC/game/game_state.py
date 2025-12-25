@@ -63,7 +63,7 @@ class GameState:
         self.game_start_time = None
         self.game_end_time = None
         self.moves_history: List[Move] = []
-        self.game_mode = 0  # 游戏模式: 0=NORMAL, 4=CHEAT
+        self.game_mode = 0  # 游戏模式: 0=NORMAL (作弊功能已改为叠加状态)
 
     def start_new_game(self):
         """开始新游戏"""
@@ -97,12 +97,10 @@ class GameState:
         # 放置棋子
         self.board[row][col] = player
 
-        # 仅在非作弊模式下翻转棋子
-        if self.game_mode != 4:  # GAME_MODE_CHEAT = 4
-            # 翻转棋子
-            directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
-            for dx, dy in directions:
-                flipped_count += self._flip_pieces_in_direction(row, col, dx, dy, player)
+        # 翻转棋子
+        directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+        for dx, dy in directions:
+            flipped_count += self._flip_pieces_in_direction(row, col, dx, dy, player)
 
         move.flipped_count = flipped_count
         self.moves_history.append(move)
@@ -111,9 +109,7 @@ class GameState:
         self.move_count += 1
         self._update_piece_counts()
 
-        # 在作弊模式下不切换玩家
-        if self.game_mode != 4:
-            self._switch_player()
+        self._switch_player()
 
         self._check_game_over()
 
@@ -127,15 +123,11 @@ class GameState:
         if self.board[row][col] != PieceType.EMPTY:
             return False
 
-        # 作弊模式: 只要位置为空即可（自由放置，跳过状态检查）
-        if self.game_mode == 4:  # GAME_MODE_CHEAT = 4
-            return True
-
-        # 正常模式: 必须是游戏进行中状态
+        # 必须是游戏进行中状态
         if self.status != GameStatus.PLAYING:
             return False
 
-        # 正常模式: 检查是否能翻转对手棋子
+        # 检查是否能翻转对手棋子
         directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
         for dx, dy in directions:
             if self._can_flip_in_direction(row, col, dx, dy, player):
@@ -311,13 +303,6 @@ class GameStateManager:
         self.current_game = GameState()
         self.current_game.game_mode = old_game_mode  # 恢复游戏模式
         self.current_game.start_new_game()
-
-        # 如果是作弊模式，清空棋盘（覆盖标准开局）
-        if old_game_mode == 4:  # GAME_MODE_CHEAT = 4
-            self.current_game.board = [[PieceType.EMPTY for _ in range(8)] for _ in range(8)]
-            self.current_game.black_count = 0
-            self.current_game.white_count = 0
-            logger.info("作弊模式：清空棋盘，使用空白开局")
 
         self._notify_observers('game_started')
 

@@ -167,6 +167,13 @@ typedef struct {
 /* Exported variables --------------------------------------------------------*/
 extern const Direction_t SEARCH_DIRECTIONS[8]; ///< All 8 search directions
 
+/**
+ * @brief External cheat mode state (defined in main.c)
+ *
+ * This flag is used by the engine to suspend game logic when cheat mode is active.
+ */
+extern bool is_cheat_active;
+
 /* Exported functions prototypes ---------------------------------------------*/
 
 /* Core game functions -------------------------------------------------------*/
@@ -203,6 +210,18 @@ bool Othello_IsValidMove(const GameState_t* state, uint8_t row, uint8_t col, Pie
  * @retval uint8_t Number of pieces flipped, 0 if move invalid
  */
 uint8_t Othello_MakeMove(GameState_t* state, uint8_t row, uint8_t col, PieceType_t player);
+
+/**
+ * @brief Place piece and flip captured pieces (cheat mode)
+ * @param state Pointer to game state
+ * @param row Move row (0-7)
+ * @param col Move column (0-7)
+ * @param player Color of piece to place
+ * @retval uint8_t Number of pieces flipped
+ * @note Does NOT validate move, allows placing on any position (including non-empty)
+ *       Used by cheat mode to enable flipping while allowing free placement
+ */
+uint8_t Othello_PlaceAndFlip(GameState_t* state, uint8_t row, uint8_t col, PieceType_t player);
 
 /**
  * @brief Pass turn (when no valid moves available)
@@ -278,6 +297,16 @@ uint8_t Othello_SimulateMove(const GameState_t* state, uint8_t row, uint8_t col,
  * @retval uint8_t Number of pieces
  */
 uint8_t Othello_CountPieces(const GameState_t* state, PieceType_t player);
+
+/**
+ * @brief Recalculate piece counts after manual board modification
+ *
+ * This function is used in cheat mode to update piece counts
+ * after direct piece replacement.
+ *
+ * @param state Pointer to game state
+ */
+void Othello_RecalculateCounts(GameState_t* state);
 
 /**
  * @brief Get board piece at position

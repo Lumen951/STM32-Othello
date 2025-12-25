@@ -59,6 +59,7 @@ UART_HandleTypeDef huart1;
 static GameState_t game_state;
 static GameStats_t game_stats;
 static bool game_initialized = false;
+static uint32_t game_session_id = 0;  // Game session ID, incremented on each new game
 
 /* Cursor control variables */
 static uint8_t cursor_row = 3;          // Cursor row position (initial: board center)
@@ -69,6 +70,10 @@ static uint32_t cursor_blink_timer = 0; // Cursor blink timer
 /* Game mode variables */
 static Game_Mode_t current_game_mode = GAME_MODE_NORMAL;  // Current game mode
 static bool is_displaying_result = false;  // Flag: displaying game result (prevent state updates)
+
+/* Cheat mode overlay state (NEW) */
+bool is_cheat_active = false;                              // Cheat mode overlay flag
+static PieceType_t cheat_selected_color = PIECE_BLACK;     // Currently selected cheat color
 
 /* Game end handling flag (set in interrupt context, processed in main loop) */
 static volatile bool game_end_pending = false;
@@ -501,6 +506,7 @@ void App_Init(void)
   /* Start new game */
   if (Othello_NewGame(&game_state) == OTHELLO_OK) {
     game_initialized = true;
+    game_session_id++;  // Increment session ID for new game
   }
 
   /* Initialize LED display */
@@ -623,31 +629,99 @@ void App_ProcessKeyEvent(Key_t* key_event)
     // First, try to handle as game control key
     if (Game_Control_HandleKey(logical_key, &game_state)) {
       DEBUG_INFO("[APP] Game control key handled: %d\r\n", logical_key);
+
+      // Increment session ID for new game operations (START or RESET)
+      if (logical_key == GAME_CTRL_KEY_START || logical_key == GAME_CTRL_KEY_RESET) {
+        game_session_id++;
+        DEBUG_INFO("[APP] New game session started, session_id=%lu\r\n", game_session_id);
+      }
+
       App_DisplayGameBoard();
       Send_GameState_Via_Protocol(&game_state);
       return;  // Key was handled by game control
     }
 
-    // Handle 'C' key for cheat mode toggle
+    // Handle 'C' key: Toggle cheat mode overlay
     if (logical_key == KEYPAD_KEY_C) {
-      // Toggle cheat mode
-      if (current_game_mode == GAME_MODE_CHEAT) {
-        // Exit cheat mode, return to normal mode
-        current_game_mode = GAME_MODE_NORMAL;
-        game_state.game_mode = GAME_MODE_NORMAL;
-        game_state.current_player = PIECE_BLACK;
-        DEBUG_INFO("[APP] Exited cheat mode -> Normal mode\r\n");
+      is_cheat_active = !is_cheat_active;
+
+      if (is_cheat_active) {
+        // Enter cheat mode (overlay on current game mode)
+        DEBUG_INFO("[CHEAT] Enabled cheat overlay on mode %d\r\n", current_game_mode);
+
+        // Default to black piece
+        cheat_selected_color = PIECE_BLACK;
+
       } else {
-        // Enter cheat mode
-        current_game_mode = GAME_MODE_CHEAT;
-        Othello_ResetState(&game_state);
-        game_state.game_mode = GAME_MODE_CHEAT;
-        // Keep current_player as is (will be set by PC or default BLACK)
-        DEBUG_INFO("[APP] Entered cheat mode\r\n");
+        // Exit cheat mode (restore game logic)
+        DEBUG_INFO("[CHEAT] Disabled cheat overlay, returning to mode %d\r\n", current_game_mode);
       }
 
       App_DisplayGameBoard();
-      Send_GameState_Via_Protocol(&game_state);
+
+      // Notify PC about cheat state change
+      Cheat_Toggle_Data_t cheat_data = {
+        .enable = is_cheat_active ? 1 : 0,
+        .selected_color = cheat_selected_color
+      };
+      Protocol_SendPacket(CMD_CHEAT_TOGGLE, (uint8_t*)&cheat_data, sizeof(cheat_data));
+
+      return;  // Don't process as game move
+    }
+
+    // Handle 'A' key: Select BLACK piece (only in cheat mode)
+    if (logical_key == KEYPAD_KEY_A) {
+      if (is_cheat_active) {
+        cheat_selected_color = PIECE_BLACK;
+        DEBUG_INFO("[CHEAT] Selected BLACK piece\r\n");
+
+        // Visual feedback: Flash cursor in black
+        RGB_Color_t gray_color = {128, 128, 128};  // Gray for visibility
+        WS2812B_SetPixel(cursor_row, cursor_col, gray_color);
+        WS2812B_Update();
+        HAL_Delay(200);
+
+        App_DisplayGameBoard();  // Restore board
+
+        // Notify PC
+        Cheat_Toggle_Data_t cheat_data = {
+          .enable = 1,
+          .selected_color = PIECE_BLACK
+        };
+        Protocol_SendPacket(CMD_CHEAT_TOGGLE, (uint8_t*)&cheat_data, sizeof(cheat_data));
+
+        return;
+      }
+      // If not in cheat mode, ignore 'A' key
+      DEBUG_INFO("[APP] 'A' key pressed but cheat mode not active\r\n");
+      return;
+    }
+
+    // Handle 'B' key: Select WHITE piece (only in cheat mode)
+    if (logical_key == KEYPAD_KEY_B) {
+      if (is_cheat_active) {
+        cheat_selected_color = PIECE_WHITE;
+        DEBUG_INFO("[CHEAT] Selected WHITE piece\r\n");
+
+        // Visual feedback: Flash cursor in white
+        RGB_Color_t white_color = {255, 255, 255};
+        WS2812B_SetPixel(cursor_row, cursor_col, white_color);
+        WS2812B_Update();
+        HAL_Delay(200);
+
+        App_DisplayGameBoard();  // Restore board
+
+        // Notify PC
+        Cheat_Toggle_Data_t cheat_data = {
+          .enable = 1,
+          .selected_color = PIECE_WHITE
+        };
+        Protocol_SendPacket(CMD_CHEAT_TOGGLE, (uint8_t*)&cheat_data, sizeof(cheat_data));
+
+        return;
+      }
+      // If not in cheat mode, ignore 'B' key
+      DEBUG_INFO("[APP] 'B' key pressed but cheat mode not active\r\n");
       return;
     }
 
@@ -690,6 +764,26 @@ void App_ProcessKeyEvent(Key_t* key_event)
 
       case KEYPAD_KEY_5: // Place Piece at Cursor
         DEBUG_INFO("[APP] Place piece at cursor (%d,%d)\r\n", cursor_row, cursor_col);
+
+        // ========== Cheat mode: Place and flip pieces ==========
+        if (is_cheat_active) {
+          // Use Othello_PlaceAndFlip() to place piece AND flip opponents
+          uint8_t flipped = Othello_PlaceAndFlip(&game_state, cursor_row, cursor_col, cheat_selected_color);
+
+          DEBUG_INFO("[CHEAT] Placed %d at (%d,%d), flipped %d pieces\r\n",
+                     cheat_selected_color, cursor_row, cursor_col, flipped);
+
+          // Update display
+          App_DisplayGameBoard();
+
+          // Send updated state to PC
+          Send_GameState_Via_Protocol(&game_state);
+
+          break;  // Skip normal move logic
+        }
+        // ========== Cheat mode logic end ==========
+
+        // Normal move logic
         if (Othello_IsValidMove(&game_state, cursor_row, cursor_col, game_state.current_player)) {
           uint8_t flipped = Othello_MakeMove(&game_state, cursor_row, cursor_col, game_state.current_player);
           if (flipped > 0) {
@@ -863,16 +957,16 @@ void App_UpdateGameDisplay(void)
  */
 void App_HandleGameOver(void)
 {
-  static uint32_t last_handled_move_count = 0;
+  static uint32_t last_handled_session_id = 0;
 
-  // 检查是否已经处理过这局游戏（使用move_count作为版本号）
-  if (game_state.move_count == last_handled_move_count) {
-    DEBUG_INFO("[GAME_OVER] Already handled move_count=%lu, skipping\r\n", game_state.move_count);
-    return;  // 已经处理过这局游戏
+  // Check if this game session has already been handled (using session_id as version identifier)
+  if (game_session_id == last_handled_session_id) {
+    DEBUG_INFO("[GAME_OVER] Already handled session_id=%lu, skipping\r\n", game_session_id);
+    return;  // This game session has already been handled
   }
 
-  // 记录当前游戏的move_count
-  last_handled_move_count = game_state.move_count;
+  // Record current session ID
+  last_handled_session_id = game_session_id;
 
   DEBUG_INFO("\r\n========== GAME OVER HANDLER START ==========\r\n");
   DEBUG_INFO("[GAME_OVER] Handling game over, move_count=%lu\r\n", game_state.move_count);
@@ -895,28 +989,32 @@ void App_HandleGameOver(void)
              winner, PIECE_BLACK, PIECE_WHITE);
 
   if (winner == PIECE_BLACK) {
-    // Player (BLACK) wins - show WIN (letter by letter)
-    DEBUG_INFO("[GAME_OVER] Displaying 'WIN' letter by letter...\r\n");
-    LED_Text_Display_Sequential("W", WS2812B_COLOR_GREEN, 1000);
-    LED_Text_Display_Sequential("I", WS2812B_COLOR_GREEN, 1000);
-    LED_Text_Display_Sequential("N", WS2812B_COLOR_GREEN, 1000);
-    DEBUG_INFO("[GAME_OVER] 'WIN' display completed\r\n");
+    // Player (BLACK) wins - show WIN
+    DEBUG_INFO("[GAME_OVER] Displaying 'WIN'...\r\n");
+    LED_Text_Status_t status = LED_Text_Display_Sequential("WIN", WS2812B_COLOR_GREEN, 1000);
+    if (status != LED_TEXT_OK) {
+      DEBUG_INFO("[GAME_OVER] WARNING: 'WIN' display failed, status=%d\r\n", status);
+    } else {
+      DEBUG_INFO("[GAME_OVER] 'WIN' display completed\r\n");
+    }
   } else if (winner == PIECE_WHITE) {
-    // AI/Opponent (WHITE) wins - show LOSE (letter by letter)
-    DEBUG_INFO("[GAME_OVER] Displaying 'LOSE' letter by letter...\r\n");
-    LED_Text_Display_Sequential("L", WS2812B_COLOR_RED, 1000);
-    LED_Text_Display_Sequential("O", WS2812B_COLOR_RED, 1000);
-    LED_Text_Display_Sequential("S", WS2812B_COLOR_RED, 1000);
-    LED_Text_Display_Sequential("E", WS2812B_COLOR_RED, 1000);
-    DEBUG_INFO("[GAME_OVER] 'LOSE' display completed\r\n");
+    // AI/Opponent (WHITE) wins - show LOSE
+    DEBUG_INFO("[GAME_OVER] Displaying 'LOSE'...\r\n");
+    LED_Text_Status_t status = LED_Text_Display_Sequential("LOSE", WS2812B_COLOR_RED, 1000);
+    if (status != LED_TEXT_OK) {
+      DEBUG_INFO("[GAME_OVER] WARNING: 'LOSE' display failed, status=%d\r\n", status);
+    } else {
+      DEBUG_INFO("[GAME_OVER] 'LOSE' display completed\r\n");
+    }
   } else {
-    // Draw game - show DRAW (letter by letter)
-    DEBUG_INFO("[GAME_OVER] Displaying 'DRAW' letter by letter...\r\n");
-    LED_Text_Display_Sequential("D", WS2812B_COLOR_YELLOW, 1000);
-    LED_Text_Display_Sequential("R", WS2812B_COLOR_YELLOW, 1000);
-    LED_Text_Display_Sequential("A", WS2812B_COLOR_YELLOW, 1000);
-    LED_Text_Display_Sequential("W", WS2812B_COLOR_YELLOW, 1000);
-    DEBUG_INFO("[GAME_OVER] 'DRAW' display completed\r\n");
+    // Draw game - show DRAW
+    DEBUG_INFO("[GAME_OVER] Displaying 'DRAW'...\r\n");
+    LED_Text_Status_t status = LED_Text_Display_Sequential("DRAW", WS2812B_COLOR_YELLOW, 1000);
+    if (status != LED_TEXT_OK) {
+      DEBUG_INFO("[GAME_OVER] WARNING: 'DRAW' display failed, status=%d\r\n", status);
+    } else {
+      DEBUG_INFO("[GAME_OVER] 'DRAW' display completed\r\n");
+    }
   }
 
   // Clear display after text sequence
@@ -1076,6 +1174,7 @@ void Protocol_Command_Handler(Protocol_Command_t cmd, uint8_t* data, uint8_t len
     case CMD_GAME_CONFIG:
       /* Handle game configuration / new game command */
       Othello_NewGame(&game_state);  // Reset game state to initial
+      game_session_id++;  // Increment session ID for new game
       App_DisplayGameBoard();  // Refresh display
       Protocol_SendAck(cmd, 0);  // Send success confirmation
       Send_GameState_Via_Protocol(&game_state);  // Send initial board state
@@ -1235,22 +1334,6 @@ void Protocol_Command_Handler(Protocol_Command_t cmd, uint8_t* data, uint8_t len
           // Timed mode not yet implemented
           DEBUG_INFO("[MODE] Timed mode not yet implemented\r\n");
           Protocol_SendAck(cmd, 1);  // Not implemented
-        } else if (current_game_mode == GAME_MODE_CHEAT) {
-          // Cheat mode: free placement mode
-          // End challenge mode if active
-          if (Challenge_GetState() != CHALLENGE_STATE_INACTIVE) {
-            Challenge_End();
-          }
-
-          // Reset game and set cheat mode
-          Othello_ResetState(&game_state);
-          game_state.game_mode = GAME_MODE_CHEAT;
-
-          DEBUG_INFO("[MODE] Cheat mode selected - waiting for color selection\r\n");
-          Protocol_SendAck(cmd, 0);  // Success
-
-          // Send current game state to PC
-          Send_GameState_Via_Protocol(&game_state);
         } else {
           Protocol_SendAck(cmd, 3);  // Invalid mode
         }
@@ -1275,39 +1358,50 @@ void Protocol_Command_Handler(Protocol_Command_t cmd, uint8_t* data, uint8_t len
       }
       break;
 
-    case CMD_CHEAT_COLOR_SELECT:
-      /* Handle cheat mode color selection */
-      if (len == sizeof(Cheat_Color_Select_Data_t)) {
-        Cheat_Color_Select_Data_t* color_data = (Cheat_Color_Select_Data_t*)data;
+    case CMD_CHEAT_TOGGLE:
+      /* Handle cheat mode toggle (overlay state) */
+      if (len == sizeof(Cheat_Toggle_Data_t)) {
+        Cheat_Toggle_Data_t* cheat_data = (Cheat_Toggle_Data_t*)data;
 
-        // Validate color (1=BLACK, 2=WHITE)
-        if (color_data->player_color != PIECE_BLACK &&
-            color_data->player_color != PIECE_WHITE) {
-          DEBUG_ERROR("[CHEAT] Invalid color: %d\r\n", color_data->player_color);
+        // === 详细日志：接收到的数据 ===
+        DEBUG_INFO("[CHEAT] Received toggle command: len=%d, enable=%d, color=%d\r\n",
+                   len, cheat_data->enable, cheat_data->selected_color);
+
+        // Validate color (must be 1=BLACK or 2=WHITE)
+        if (cheat_data->selected_color != PIECE_BLACK &&
+            cheat_data->selected_color != PIECE_WHITE) {
+          DEBUG_ERROR("[CHEAT] ❌ Invalid color: %d (expected 1=BLACK or 2=WHITE)\r\n",
+                      cheat_data->selected_color);
+          DEBUG_ERROR("[CHEAT] Raw data bytes: enable=0x%02X, color=0x%02X\r\n",
+                      cheat_data->enable, cheat_data->selected_color);
           Protocol_SendAck(cmd, 1);  // Invalid parameter
           break;
         }
 
-        // Only allow in cheat mode
-        if (current_game_mode != GAME_MODE_CHEAT) {
-          DEBUG_ERROR("[CHEAT] Not in cheat mode\r\n");
-          Protocol_SendAck(cmd, 2);  // Wrong mode
-          break;
-        }
+        // Update cheat overlay state
+        bool prev_state = is_cheat_active;
+        is_cheat_active = (cheat_data->enable != 0);
+        cheat_selected_color = (PieceType_t)cheat_data->selected_color;
 
-        // Set the selected color as current player
-        game_state.current_player = (PieceType_t)color_data->player_color;
+        DEBUG_INFO("[CHEAT] Toggle: %s, Color: %s\r\n",
+                   is_cheat_active ? "ENABLED" : "DISABLED",
+                   cheat_selected_color == PIECE_BLACK ? "BLACK" : "WHITE");
 
-        DEBUG_INFO("[CHEAT] Color selected: %s\r\n",
-                   color_data->player_color == PIECE_BLACK ? "BLACK" : "WHITE");
-
+        App_DisplayGameBoard();
         Protocol_SendAck(cmd, 0);  // Success
 
         // Send updated game state to PC
         Send_GameState_Via_Protocol(&game_state);
+
       } else {
-        Protocol_SendAck(cmd, 3);  // Invalid length
+        Protocol_SendAck(cmd, 1);  // Invalid length
       }
+      break;
+
+    case CMD_CHEAT_COLOR_SELECT:
+      /* [DEPRECATED] Handle old cheat color select command for backward compatibility */
+      DEBUG_INFO("[CHEAT] Received deprecated CMD_CHEAT_COLOR_SELECT, ignoring\r\n");
+      Protocol_SendAck(cmd, 255);  // Deprecated command
       break;
 
     default:

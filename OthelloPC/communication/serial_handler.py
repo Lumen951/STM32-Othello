@@ -42,7 +42,8 @@ class SerialProtocol:
     CMD_MODE_SELECT = 0x0D      # 模式选择
     CMD_SCORE_UPDATE = 0x0E     # 分数更新
     CMD_TIMER_UPDATE = 0x0F     # 计时器更新
-    CMD_CHEAT_COLOR_SELECT = 0x10  # 作弊模式颜色选择
+    CMD_CHEAT_COLOR_SELECT = 0x10  # [DEPRECATED] 作弊模式颜色选择（已废弃）
+    CMD_CHEAT_TOGGLE = 0x11     # 作弊模式切换（叠加状态）
     CMD_ERROR = 0xFF            # 错误响应
 
     # 游戏控制动作
@@ -56,7 +57,7 @@ class SerialProtocol:
     GAME_MODE_NORMAL = 0x01     # 普通模式
     GAME_MODE_CHALLENGE = 0x02  # 闯关模式
     GAME_MODE_TIMED = 0x03      # 计时模式
-    GAME_MODE_CHEAT = 0x04      # 作弊模式
+    # GAME_MODE_CHEAT (0x04) 已删除 - 作弊功能改为叠加状态
 
     @staticmethod
     def calculate_checksum(command: int, length: int, data: bytes) -> int:
@@ -377,17 +378,82 @@ class SerialHandler:
 
         Args:
             mode: 游戏模式 (GAME_MODE_NORMAL/CHALLENGE/TIMED)
+                  ⚠️ GAME_MODE_CHEAT已废弃，请使用send_cheat_toggle()
             time_limit: 时间限制（秒），仅用于计时模式
 
         Returns:
             bool: 发送是否成功
         """
+        # 拒绝废弃的作弊模式值
+        if mode == 0x04:  # Old GAME_MODE_CHEAT
+            self.logger.error("GAME_MODE_CHEAT is deprecated. Use send_cheat_toggle() instead.")
+            return False
+
         data = struct.pack('<BH', mode, time_limit)
         return self.send_command(SerialProtocol.CMD_MODE_SELECT, data)
 
+    def send_cheat_toggle(self, enable: bool, selected_color: int = 1) -> bool:
+        """
+        发送作弊模式切换命令
+
+        Args:
+            enable: True=启用作弊叠加, False=禁用作弊叠加
+            selected_color: 选定的棋子颜色 (1=黑棋, 2=白棋)
+
+        Returns:
+            bool: 发送是否成功
+        """
+        # === 严格参数验证 ===
+        if not isinstance(selected_color, int):
+            self.logger.error(f"❌ Invalid color type: {type(selected_color).__name__}, expected int")
+            return False
+
+        if selected_color not in [1, 2]:
+            self.logger.error(f"❌ Invalid selected color value: {selected_color}, must be 1 (BLACK) or 2 (WHITE)")
+            return False
+
+        # === 连接状态检查 ===
+        if not self.is_connected():
+            self.logger.error("❌ Cannot send cheat toggle: STM32 not connected")
+            return False
+
+        try:
+            # 构造数据包: uint8_t enable + uint8_t selected_color
+            enable_byte = 1 if enable else 0
+
+            # 确保颜色值为有效的uint8_t
+            color_byte = int(selected_color) & 0xFF
+
+            data = struct.pack('<BB', enable_byte, color_byte)
+
+            # 详细日志
+            state_name = "ENABLED" if enable else "DISABLED"
+            color_name = "BLACK" if selected_color == 1 else "WHITE"
+            self.logger.info(f"📤 Sending cheat toggle: {state_name}, Color: {color_name} (enable={enable_byte}, color={color_byte})")
+
+            # 发送命令
+            success = self.send_command(SerialProtocol.CMD_CHEAT_TOGGLE, data)
+
+            if success:
+                self.logger.info(f"✅ Cheat toggle sent successfully")
+            else:
+                self.logger.error("❌ Failed to send cheat toggle command")
+
+            return success
+
+        except struct.error as e:
+            self.logger.error(f"❌ Struct packing error: {e}")
+            return False
+        except Exception as e:
+            self.logger.error(f"❌ Error sending cheat toggle: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
     def send_cheat_color_select(self, player_color: int) -> bool:
         """
-        发送作弊模式颜色选择命令
+        [DEPRECATED] 发送作弊模式颜色选择命令
+        请使用 send_cheat_toggle() 代替
 
         Args:
             player_color: 玩家颜色 (1=黑棋, 2=白棋)
@@ -395,28 +461,9 @@ class SerialHandler:
         Returns:
             bool: 发送是否成功
         """
-        if player_color not in [1, 2]:
-            self.logger.error(f"Invalid player color: {player_color}")
-            return False
-
-        try:
-            # 构造数据包: uint8_t player_color
-            data = struct.pack('<B', player_color)
-
-            # 发送命令
-            success = self.send_command(SerialProtocol.CMD_CHEAT_COLOR_SELECT, data)
-
-            if success:
-                color_name = "BLACK" if player_color == 1 else "WHITE"
-                self.logger.info(f"Sent cheat color select: {color_name}")
-            else:
-                self.logger.error("Failed to send cheat color select command")
-
-            return success
-
-        except Exception as e:
-            self.logger.error(f"Error sending cheat color select: {e}")
-            return False
+        self.logger.warning("send_cheat_color_select() is deprecated, use send_cheat_toggle() instead")
+        # 为了向后兼容，转换为新格式
+        return self.send_cheat_toggle(True, player_color)
 
     def send_score_update(self, black_score: int, white_score: int,
                          total_score: int = 0, game_result: int = 0) -> bool:

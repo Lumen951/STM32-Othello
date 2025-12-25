@@ -162,7 +162,7 @@ uint8_t Othello_MakeMove(GameState_t* state, uint8_t row, uint8_t col, PieceType
     Othello_InvalidateValidMovesCache(state);
 
     // Check game mode for player switching logic
-    if (state->game_mode == GAME_MODE_CHEAT) {
+    if (is_cheat_active) {
         // Cheat mode: Do NOT switch player, keep current_player unchanged
         // No need to check for valid moves or game over
         // Player can continue placing same color pieces
@@ -192,6 +192,57 @@ uint8_t Othello_MakeMove(GameState_t* state, uint8_t row, uint8_t col, PieceType
 }
 
 /**
+ * @brief Place piece and flip captured pieces (cheat mode version)
+ * @note This function allows placing on ANY position (including non-empty)
+ *       and flips all pieces that would be captured in all 8 directions.
+ *       Does NOT check if the move is valid.
+ * @param state Pointer to game state
+ * @param row Row (0-7)
+ * @param col Column (0-7)
+ * @param player Color of piece to place
+ * @retval uint8_t Number of pieces flipped
+ */
+uint8_t Othello_PlaceAndFlip(GameState_t* state, uint8_t row, uint8_t col, PieceType_t player)
+{
+    if (!state || state->status != GAME_STATUS_PLAYING ||
+        row >= 8 || col >= 8 ||
+        (player != PIECE_BLACK && player != PIECE_WHITE)) {
+        return 0;
+    }
+
+    uint8_t total_flipped = 0;
+
+    // Place the piece (overwrite if position not empty)
+    state->board[row][col] = player;
+
+    // Flip pieces in all 8 directions
+    for (int i = 0; i < 8; i++) {
+        total_flipped += Othello_FlipPiecesInDirection(state, row, col,
+                                                     SEARCH_DIRECTIONS[i].dx,
+                                                     SEARCH_DIRECTIONS[i].dy,
+                                                     player, true);
+    }
+
+    // Update move history
+    state->last_move.row = row;
+    state->last_move.col = col;
+    state->last_move.player = player;
+    state->last_move.flipped_count = total_flipped;
+    state->last_move.timestamp = HAL_GetTick();
+
+    // Update game state
+    state->move_count++;
+    state->consecutive_passes = 0;  // Reset pass counter
+    Othello_UpdatePieceCounts(state);
+    Othello_InvalidateValidMovesCache(state);
+
+    // In cheat mode, do NOT switch player (keep playing with same color)
+    // The caller (App_ProcessKeyEvent) ensures is_cheat_active is true
+
+    return total_flipped;
+}
+
+/**
  * @brief Pass turn
  */
 Othello_Status_t Othello_PassTurn(GameState_t* state)
@@ -216,6 +267,11 @@ Othello_Status_t Othello_PassTurn(GameState_t* state)
  */
 bool Othello_IsGameOver(const GameState_t* state)
 {
+    // Cheat mode active: Suspend game over detection
+    if (is_cheat_active) {
+        return false;  // Game never ends in cheat mode
+    }
+
     return state ? (state->status != GAME_STATUS_PLAYING) : true;
 }
 
@@ -655,5 +711,33 @@ static void Othello_UpdateGameStatus(GameState_t* state)
         state->status = GAME_STATUS_WHITE_WIN;
     } else {
         state->status = GAME_STATUS_DRAW;
+    }
+}
+
+/**
+ * @brief Recalculate piece counts after manual board modification
+ *
+ * This function is used in cheat mode to update piece counts
+ * after direct piece replacement.
+ *
+ * @param state Pointer to game state
+ */
+void Othello_RecalculateCounts(GameState_t* state)
+{
+    if (state == NULL) {
+        return;
+    }
+
+    state->black_count = 0;
+    state->white_count = 0;
+
+    for (int row = 0; row < 8; row++) {
+        for (int col = 0; col < 8; col++) {
+            if (state->board[row][col] == PIECE_BLACK) {
+                state->black_count++;
+            } else if (state->board[row][col] == PIECE_WHITE) {
+                state->white_count++;
+            }
+        }
     }
 }

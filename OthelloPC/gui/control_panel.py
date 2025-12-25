@@ -135,7 +135,7 @@ class ControlPanel(tk.Frame):
         self.mode_combo = ttk.Combobox(
             mode_frame,
             textvariable=self.mode_var,
-            values=["普通模式", "作弊模式", "闯关模式", "计时模式"],
+            values=["普通模式", "闯关模式", "计时模式"],  # 移除"作弊模式"
             state='readonly',
             width=12,
             font=('Arial', 10)
@@ -168,38 +168,50 @@ class ControlPanel(tk.Frame):
         )
         self.ai_difficulty_combo.pack(side='left', fill='x', expand=True)
 
-        # === 作弊模式颜色选择（仅作弊模式可见）===
-        self.cheat_color_frame = tk.Frame(main_container, bg=DieterStyle.COLORS['board_bg'])
-        self.cheat_color_frame.pack(fill='x', padx=10, pady=5)
-        self.cheat_color_frame.pack_forget()  # 初始隐藏
+        # === 作弊模式叠加复选框（全局可见）===
+        self.cheat_overlay_frame = tk.Frame(main_container, bg=DieterStyle.COLORS['board_bg'])
+        self.cheat_overlay_frame.pack(fill='x', padx=10, pady=5)
 
+        # 作弊模式复选框
+        self.cheat_enabled_var = tk.BooleanVar(value=False)
+        self.cheat_checkbox = ttk.Checkbutton(
+            self.cheat_overlay_frame,
+            text="开启作弊模式",
+            variable=self.cheat_enabled_var,
+            command=self._on_cheat_toggle
+        )
+        self.cheat_checkbox.pack(side='left', padx=(0, 20))
+
+        # 颜色选择（仅作弊启用时可用）
         color_label = tk.Label(
-            self.cheat_color_frame,
+            self.cheat_overlay_frame,
             text="选择颜色:",
-            font=('Arial', 10, 'bold'),
+            font=('Arial', 10),
             bg=DieterStyle.COLORS['board_bg'],
             fg=DieterStyle.COLORS['gray_dark']
         )
         color_label.pack(side='left', padx=(0, 10))
 
         self.cheat_color_var = tk.StringVar(value="黑棋")
-        black_radio = ttk.Radiobutton(
-            self.cheat_color_frame,
+        self.cheat_black_radio = ttk.Radiobutton(
+            self.cheat_overlay_frame,
             text="黑棋",
             variable=self.cheat_color_var,
             value="黑棋",
-            command=self._on_cheat_color_changed
+            command=self._on_cheat_color_changed,
+            state='disabled'  # 初始禁用
         )
-        black_radio.pack(side='left', padx=5)
+        self.cheat_black_radio.pack(side='left', padx=(0, 10))
 
-        white_radio = ttk.Radiobutton(
-            self.cheat_color_frame,
+        self.cheat_white_radio = ttk.Radiobutton(
+            self.cheat_overlay_frame,
             text="白棋",
             variable=self.cheat_color_var,
             value="白棋",
-            command=self._on_cheat_color_changed
+            command=self._on_cheat_color_changed,
+            state='disabled'  # 初始禁用
         )
-        white_radio.pack(side='left', padx=5)
+        self.cheat_white_radio.pack(side='left')
 
         # === 状态显示 ===
         status_frame = tk.Frame(main_container, bg='white', relief='ridge', bd=2)
@@ -250,12 +262,8 @@ class ControlPanel(tk.Frame):
             time_limit = 300 if self.current_mode == SerialProtocol.GAME_MODE_TIMED else 0
             self.serial_handler.send_mode_select(self.current_mode, time_limit)
 
-            # 如果是作弊模式，重新发送颜色选择
-            if self.current_mode == SerialProtocol.GAME_MODE_CHEAT:
-                color_name = self.cheat_color_var.get()
-                player_color = 1 if color_name == "黑棋" else 2
-                self.serial_handler.send_cheat_color_select(player_color)
-                self.logger.info(f"重新发送作弊模式设置: 颜色={color_name}")
+            # 作弊模式通过 send_cheat_toggle() 单独控制，不是游戏模式
+            # 已在 _on_cheat_toggle() 中处理，此处无需额外发送
 
             # 然后发送开始命令
             if self.serial_handler.send_game_start():
@@ -342,10 +350,9 @@ class ControlPanel(tk.Frame):
         """模式选择变化"""
         mode_name = self.mode_var.get()
 
-        # 映射模式名称到协议常量
+        # 映射模式名称到协议常量（移除作弊模式）
         mode_map = {
             "普通模式": SerialProtocol.GAME_MODE_NORMAL,
-            "作弊模式": SerialProtocol.GAME_MODE_CHEAT,
             "闯关模式": SerialProtocol.GAME_MODE_CHALLENGE,
             "计时模式": SerialProtocol.GAME_MODE_TIMED
         }
@@ -360,7 +367,6 @@ class ControlPanel(tk.Frame):
                 # 恢复到之前的模式
                 old_mode_name = {
                     SerialProtocol.GAME_MODE_NORMAL: "普通模式",
-                    SerialProtocol.GAME_MODE_CHEAT: "作弊模式",
                     SerialProtocol.GAME_MODE_CHALLENGE: "闯关模式",
                     SerialProtocol.GAME_MODE_TIMED: "计时模式"
                 }.get(self.current_mode, "普通模式")
@@ -377,15 +383,9 @@ class ControlPanel(tk.Frame):
         # 显示/隐藏AI难度选择（仅闯关模式可见）
         if mode_name == "闯关模式":
             self.ai_difficulty_frame.pack(fill='x', padx=10, pady=5, after=self.mode_combo.master)
-            self.cheat_color_frame.pack_forget()
-        elif mode_name == "作弊模式":
-            # 显示作弊模式颜色选择
-            self.ai_difficulty_frame.pack_forget()
-            self.cheat_color_frame.pack(fill='x', padx=10, pady=5, after=self.mode_combo.master)
         else:
             # 普通模式和计时模式
             self.ai_difficulty_frame.pack_forget()
-            self.cheat_color_frame.pack_forget()
 
         # 调用模式变化回调
         if self.on_mode_change:
@@ -401,10 +401,6 @@ class ControlPanel(tk.Frame):
         self.logger.info(f"发送模式选择命令: {mode_name} (0x{self.current_mode:02X})")
         if self.serial_handler.send_mode_select(self.current_mode, time_limit):
             self.logger.info(f"模式切换成功: {mode_name}")
-
-            # 如果是作弊模式，立即发送颜色选择
-            if mode_name == "作弊模式":
-                self._on_cheat_color_changed()
         else:
             self.logger.error("发送模式选择命令失败")
 
@@ -493,19 +489,111 @@ class ControlPanel(tk.Frame):
         }
         return difficulty_map.get(self.ai_difficulty_var.get(), 1)
 
-    def _on_cheat_color_changed(self):
-        """作弊模式颜色选择变化回调"""
-        if self.current_mode != SerialProtocol.GAME_MODE_CHEAT:
+    def _on_cheat_toggle(self):
+        """作弊模式复选框切换"""
+        is_enabled = self.cheat_enabled_var.get()
+
+        # ========== 新增：防止重复触发 ==========
+        if hasattr(self, '_last_cheat_state') and self._last_cheat_state == is_enabled:
+            self.logger.debug("Cheat state unchanged, ignoring duplicate toggle")
+            return  # 状态未变化，忽略
+
+        self._last_cheat_state = is_enabled
+        # ========== 新增结束 ==========
+
+        # 启用/禁用颜色选择单选按钮
+        state = 'normal' if is_enabled else 'disabled'
+        self.cheat_black_radio.config(state=state)
+        self.cheat_white_radio.config(state=state)
+
+        # === 严格参数验证 ===
+        color_name = self.cheat_color_var.get()
+
+        # 验证颜色名称
+        if color_name not in ["黑棋", "白棋"]:
+            self.logger.error(f"❌ Invalid color name: {color_name}")
+            self.cheat_enabled_var.set(not is_enabled)
             return
 
-        color_name = self.cheat_color_var.get()
-        player_color = 1 if color_name == "黑棋" else 2  # 1=BLACK, 2=WHITE
+        # 映射颜色：1=黑棋, 2=白棋
+        player_color = 1 if color_name == "黑棋" else 2
 
-        # 触发上位机的颜色选择回调
+        # 二次验证：确保颜色值为整数1或2
+        if not isinstance(player_color, int) or player_color not in [1, 2]:
+            self.logger.error(f"❌ Color mapping failed: {color_name} -> {player_color}")
+            self.cheat_enabled_var.set(not is_enabled)
+            return
+
+        # === 连接状态检查 ===
+        if not self.serial_handler or not self.serial_handler.is_connected():
+            self.logger.warning("⚠️ 未连接到STM32，无法发送作弊模式命令")
+            # 恢复复选框状态
+            self.cheat_enabled_var.set(not is_enabled)
+
+            # 弹出提示框
+            from tkinter import messagebox
+            messagebox.showwarning(
+                "连接错误",
+                "未连接到STM32设备\n\n作弊模式需要与下位机通信，请先连接设备。"
+            )
+            return
+
+        # === 发送作弊叠加命令到STM32 ===
+        self.logger.info(f"📤 Sending cheat toggle: enable={is_enabled}, color={color_name} ({player_color})")
+
+        success = self.serial_handler.send_cheat_toggle(is_enabled, player_color)
+
+        if success:
+            status = "启用" if is_enabled else "禁用"
+            self.logger.info(f"✅ 作弊模式{status}成功: {color_name}")
+        else:
+            self.logger.error("❌ 发送作弊模式切换命令失败")
+            # 恢复复选框状态
+            self.cheat_enabled_var.set(not is_enabled)
+
+            # 弹出错误提示
+            from tkinter import messagebox
+            messagebox.showerror(
+                "通信错误",
+                f"无法发送作弊模式命令到STM32\n\n请检查：\n1. 设备连接是否正常\n2. 串口通信是否稳定"
+            )
+
+        # ========== 通知主窗口作弊模式状态变化 ==========
+        if self.main_window:
+            self.main_window._cheat_mode_enabled = is_enabled
+            self.logger.info(f"通知主窗口: 作弊模式={'启用' if is_enabled else '禁用'}")
+
+    def _on_cheat_color_changed(self):
+        """作弊模式颜色选择变化回调"""
+        if not self.cheat_enabled_var.get():
+            # 作弊模式未启用，忽略颜色变化
+            self.logger.debug("Cheat mode not enabled, ignoring color change")
+            return
+
+        # === 严格参数验证 ===
+        color_name = self.cheat_color_var.get()
+
+        # 验证颜色名称
+        if color_name not in ["黑棋", "白棋"]:
+            self.logger.error(f"❌ Invalid color name: {color_name}")
+            return
+
+        # 映射颜色：1=黑棋, 2=白棋
+        player_color = 1 if color_name == "黑棋" else 2
+
+        # 二次验证：确保颜色值为整数1或2
+        if not isinstance(player_color, int) or player_color not in [1, 2]:
+            self.logger.error(f"❌ Color mapping failed: {color_name} -> {player_color}")
+            return
+
+        # ========== 新增：只更新上位机状态，不重复发送到STM32 ==========
+        # 触发上位机的颜色选择回调（更新 current_player）
         if hasattr(self, 'on_cheat_color_selected') and self.on_cheat_color_selected:
             self.on_cheat_color_selected(player_color)
 
-        # 发送颜色选择命令到STM32（仅用于显示同步）
-        if self.serial_handler and self.serial_handler.is_connected():
-            self.serial_handler.send_cheat_color_select(player_color)
-            self.logger.info(f"Cheat mode color selected: {color_name}")
+        self.logger.info(f"✅ 作弊颜色切换: {color_name} (仅上位机本地)")
+
+        # ========== 移除原有的 STM32 通信代码（避免重复发送）==========
+        # 不再调用 send_cheat_toggle()，因为这会导致下位机重新初始化作弊模式
+        # 下位机的颜色切换通过按键 A/B 在本地完成
+

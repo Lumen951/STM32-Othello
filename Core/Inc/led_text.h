@@ -67,13 +67,16 @@ LED_Text_Status_t LED_Text_DisplayChar(char c, uint8_t x, uint8_t y, RGB_Color_t
 LED_Text_Status_t LED_Text_Clear(void);
 
 /**
- * @brief Display text sequentially, one character at a time (Plan A)
+ * @brief Display text sequentially, one character at a time
  * @param text Text string to display (each character shown individually)
  * @param color RGB color for text
  * @param letter_duration_ms Duration to show each letter in milliseconds
- * @retval LED_Text_Status_t Status of operation
+ * @retval LED_Text_Status_t Status of operation (LED_TEXT_OK, LED_TEXT_ERROR, LED_TEXT_INVALID_PARAM)
  * @note Each character is centered and displayed for the specified duration
  *       Example: "WIN" -> shows 'W' (1s), 'I' (1s), 'N' (1s)
+ * @note This function includes DMA busy checking and automatic retry mechanism
+ *       to ensure reliable display even when called rapidly after previous operations
+ * @note Maximum wait time per character: 100ms (DMA idle) + 10ms (retry) = 110ms
  */
 LED_Text_Status_t LED_Text_Display_Sequential(const char* text, RGB_Color_t color,
                                                uint16_t letter_duration_ms);

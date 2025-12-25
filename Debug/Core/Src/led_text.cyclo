@@ -1,6 +1,6 @@
-../Core/Src/led_text.c:153:19:LED_Text_Init	1
-../Core/Src/led_text.c:162:19:LED_Text_DisplayChar	2
-../Core/Src/led_text.c:177:19:LED_Text_Clear	1
-../Core/Src/led_text.c:193:19:LED_Text_Display_Sequential	4
-../Core/Src/led_text.c:232:23:LED_Text_GetCharBitmap	4
-../Core/Src/led_text.c:249:13:LED_Text_DrawBitmap	6
+../Core/Src/led_text.c:154:19:LED_Text_Init	1
+../Core/Src/led_text.c:163:19:LED_Text_DisplayChar	2
+../Core/Src/led_text.c:178:19:LED_Text_Clear	1
+../Core/Src/led_text.c:194:19:LED_Text_Display_Sequential	10
+../Core/Src/led_text.c:261:23:LED_Text_GetCharBitmap	4
+../Core/Src/led_text.c:278:13:LED_Text_DrawBitmap	6
